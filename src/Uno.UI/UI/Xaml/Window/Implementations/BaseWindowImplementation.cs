@@ -29,7 +29,6 @@ namespace Uno.UI.Xaml.Controls;
 
 internal abstract class BaseWindowImplementation : IWindowImplementation
 {
-	private bool _wasShown;
 	private CoreWindowActivationState _lastActivationState = CoreWindowActivationState.Deactivated;
 	private Size _lastSize = new Size(-1, -1);
 
@@ -80,22 +79,22 @@ internal abstract class BaseWindowImplementation : IWindowImplementation
 
 	public virtual void Activate()
 	{
-		if (_isClosed)
+		if (NativeWindowFactory.SupportsMultipleWindows && _isClosed)
 		{
 			throw new InvalidOperationException("Cannot reactivate a closed window.");
 		}
 
-		if (!_wasShown)
+		if (NativeWindowWrapper is null)
 		{
-			_wasShown = true;
+			throw new InvalidOperationException("Native window is not initialized.");
+		}
 
-			SetVisibleBoundsFromNative();
-			NativeWindowWrapper?.Show();
-		}
-		else
+		if (!NativeWindowWrapper.WasShown)
 		{
-			NativeWindowWrapper?.Activate();
+			SetVisibleBoundsFromNative();
 		}
+
+		NativeWindowWrapper?.Show(true);
 
 		OnActivationStateChanged(CoreWindowActivationState.CodeActivated);
 	}
@@ -221,7 +220,7 @@ internal abstract class BaseWindowImplementation : IWindowImplementation
 
 	private void OnNativeVisibilityChanged(object? sender, bool isVisible)
 	{
-		if (!_wasShown)
+		if (NativeWindowWrapper is not { WasShown: true })
 		{
 			return;
 		}
@@ -237,7 +236,7 @@ internal abstract class BaseWindowImplementation : IWindowImplementation
 
 	private void OnNativeActivationChanged(object? sender, CoreWindowActivationState state)
 	{
-		if (!_wasShown)
+		if (NativeWindowWrapper is not { WasShown: true })
 		{
 			return;
 		}
@@ -270,7 +269,10 @@ internal abstract class BaseWindowImplementation : IWindowImplementation
 		CoreWindow?.OnActivated(coreWindowActivatedEventArgs);
 		Activated?.Invoke(Window, activatedEventArgs);
 		SystemThemeHelper.RefreshSystemTheme();
-		KeyboardStateTracker.Reset();
+		if (!FeatureConfiguration.DebugOptions.PreventKeyboardStateTrackerFromResettingOnWindowActivationChange)
+		{
+			KeyboardStateTracker.Reset();
+		}
 	}
 
 	public bool Close()
@@ -318,10 +320,13 @@ internal abstract class BaseWindowImplementation : IWindowImplementation
 
 			// Window.PrepareToClose();
 
-			// set these to null before marking window as closed as they fail if called after m_bIsClosed is set
-			// because they check if window is closed already
-			Window.SetTitleBar(null);
-			Window.Content = null;
+			if (NativeWindowFactory.SupportsMultipleWindows)
+			{
+				// set these to null before marking window as closed as they fail if called after m_bIsClosed is set
+				// because they check if window is closed already
+				Window.SetTitleBar(null);
+				Window.Content = null;
+			}
 
 			// _windowChrome.SetDesktopWindow(null);
 
@@ -336,8 +341,11 @@ internal abstract class BaseWindowImplementation : IWindowImplementation
 				RaiseWindowVisibilityChangedEvent(false);
 			}
 
-			// Close native window, cleanup, and unregister from hwnd mapping from DXamlCore
-			Shutdown();
+			if (NativeWindowFactory.SupportsMultipleWindows)
+			{
+				// Close native window, cleanup, and unregister from hwnd mapping from DXamlCore
+				Shutdown();
+			}
 
 			return true;
 		}

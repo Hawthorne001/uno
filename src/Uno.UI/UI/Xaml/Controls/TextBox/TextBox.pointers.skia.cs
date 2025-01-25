@@ -91,8 +91,13 @@ public partial class TextBox
 		// this textbox but GetPosition assumes that it is relative to the displayBlock, so we compensate.
 		// var position = e.GetPosition(displayBlock);
 		var position = displayBlock.TransformToVisual(this).Inverse.TransformPoint(e.GetPosition(displayBlock));
+
 		var index = Math.Max(0, displayBlock.Inlines.GetIndexAt(position, true, true));
-		Select(index, 0);
+		if (index < SelectionStart || index >= SelectionStart + SelectionLength)
+		{
+			// Right tapping should move the caret to the current pointer location if outside the selection
+			Select(index, 0);
+		}
 
 		OpenContextMenu(position);
 	}
@@ -104,8 +109,8 @@ public partial class TextBox
 		var currentPosition = down.Position;
 
 		return previousTap.id == currentId
-			&& currentTs - previousTap.ts <= GestureRecognizer.MultiTapMaxDelayTicks
-			&& !GestureRecognizer.Gesture.IsOutOfTapRange(previousTap.position, currentPosition);
+			&& currentTs - previousTap.ts <= GestureRecognizer.MultiTapMaxDelayMicroseconds
+			&& !GestureRecognizer.IsOutOfTapRange(previousTap.position, currentPosition);
 	}
 
 	partial void OnPointerPressedPartial(PointerRoutedEventArgs args)
@@ -176,7 +181,7 @@ public partial class TextBox
 
 		_isPressed = false;
 
-		if ((args.GetCurrentPoint(null).Timestamp - _lastPointerDown.point.Timestamp) >= GestureRecognizer.HoldMinDelayTicks)
+		if ((args.GetCurrentPoint(null).Timestamp - _lastPointerDown.point.Timestamp) >= GestureRecognizer.HoldMinDelayMicroseconds)
 		{
 			// Touch holding
 			OpenContextMenu(args.GetCurrentPoint(this).Position);

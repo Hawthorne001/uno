@@ -182,10 +182,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			await UITestHelper.Load(expected);
 			var screenshot2 = await UITestHelper.ScreenShot(expected);
 
-			Assert.AreEqual(screenshot2.Width, screenshot1.Width);
-			Assert.AreEqual(screenshot2.Height, screenshot1.Height);
-
-			await ImageAssert.AreSimilarAsync(screenshot1, screenshot2, imperceptibilityThreshold: 0.15);
+			// we tolerate a 2 pixels difference between the bitmaps due to font differences
+			await ImageAssert.AreSimilarAsync(screenshot1, screenshot2, imperceptibilityThreshold: 0.18, resolutionTolerance: 2);
 		}
 #endif
 
@@ -895,7 +893,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			await WindowHelper.WaitForIdle(); // necessary on ios, since the container finished loading before the text is drawn
 
 			Assert.IsFalse(sut.IsTextTrimmed, "IsTextTrimmed should not be trimmed.");
-			Assert.IsTrue(states.Count == 0, $"IsTextTrimmedChanged should not proc at all. states: {(string.Join(", ", states) is string { Length: > 0 } tmp ? tmp : "(-empty-)")}");
+			Assert.AreEqual(0, states.Count, $"IsTextTrimmedChanged should not proc at all. states: {(string.Join(", ", states) is string { Length: > 0 } tmp ? tmp : "(-empty-)")}");
 		}
 #endif
 
@@ -1146,6 +1144,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 #endif
 		public async Task When_IsTextSelectionEnabled_CRLF()
 		{
+			var delayToAvoidDoubleTap = 600;
 			var SUT = new TextBlock
 			{
 				Text = "FirstLine\r\n Second",
@@ -1167,7 +1166,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			mouse.Release();
 			mouse.Press();
 			mouse.Release();
-			await WindowHelper.WaitForIdle();
+			await Task.Delay(delayToAvoidDoubleTap);
 
 			SUT.CopySelectionToClipboard();
 			await WindowHelper.WaitForIdle();
@@ -1182,7 +1181,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			mouse.Release();
 			mouse.Press();
 			mouse.Release();
-			await WindowHelper.WaitForIdle();
+			await Task.Delay(delayToAvoidDoubleTap);
 
 			SUT.CopySelectionToClipboard();
 			await WindowHelper.WaitForIdle();
@@ -1264,7 +1263,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			mouse.Release();
 			await WindowHelper.WaitForIdle();
 
-			SUT.SafeRaiseEvent(UIElement.KeyDownEvent, new KeyRoutedEventArgs(SUT, VirtualKey.A, VirtualKeyModifiers.Control));
+			var mod = OperatingSystem.IsMacOS() ? VirtualKeyModifiers.Windows : VirtualKeyModifiers.Control;
+			SUT.SafeRaiseEvent(UIElement.KeyDownEvent, new KeyRoutedEventArgs(SUT, VirtualKey.A, mod));
 			await WindowHelper.WaitForIdle();
 
 			var bitmap = await UITestHelper.ScreenShot(SUT);
@@ -1278,7 +1278,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 					SUT.SelectionHighlightColor.Color);
 			}
 
-			SUT.SafeRaiseEvent(UIElement.KeyDownEvent, new KeyRoutedEventArgs(SUT, VirtualKey.C, VirtualKeyModifiers.Control));
+			SUT.SafeRaiseEvent(UIElement.KeyDownEvent, new KeyRoutedEventArgs(SUT, VirtualKey.C, mod));
 			await WindowHelper.WaitForIdle();
 
 			Assert.AreEqual(SUT.Text, await Clipboard.GetContent()!.GetTextAsync());

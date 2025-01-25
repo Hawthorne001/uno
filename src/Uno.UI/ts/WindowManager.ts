@@ -133,6 +133,7 @@ namespace Uno.UI {
 		private static dispatchSuspendingMethod: any;
 		private static getDependencyPropertyValueMethod: any;
 		private static setDependencyPropertyValueMethod: any;
+		private static keyTrackingMethod: any;
 
 		private constructor(private containerElementId: string, private loadingElementId: string) {
 			this.initDom();
@@ -629,21 +630,6 @@ namespace Uno.UI {
 		}
 
 		/**
-		* Sets the fill property of the specified element
-		*/
-		public setElementFillNative(pParam: number): boolean {
-			const params = WindowManagerSetElementFillParams.unmarshal(pParam);
-			this.setElementFillInternal(params.HtmlId, params.Color);
-			return true;
-		}
-
-		private setElementFillInternal(elementId: number, color: number): void {
-			const element = this.getView(elementId);
-
-			element.style.setProperty("fill", this.numberToCssColor(color));
-		}
-
-		/**
 		* Sets the background color property of the specified element
 		*/
 		public setElementBackgroundColor(pParam: number): boolean {
@@ -983,24 +969,7 @@ namespace Uno.UI {
 			delete this.allActiveElementsById[elementId];
 		}
 
-		public getBBoxNative(pParams: number, pReturn: number): boolean {
-
-			const params = WindowManagerGetBBoxParams.unmarshal(pParams);
-
-			const bbox = this.getBBoxInternal(params.HtmlId);
-
-			const ret = new WindowManagerGetBBoxReturn();
-			ret.X = bbox.x;
-			ret.Y = bbox.y;
-			ret.Width = bbox.width;
-			ret.Height = bbox.height;
-
-			ret.marshal(pReturn);
-
-			return true;
-		}
-
-		private getBBoxInternal(elementId: number): any {
+		public getBBox(elementId: number): any {
 
 			const element = this.getView(elementId) as SVGGraphicsElement;
 			let unconnectedRoot: HTMLElement | SVGGraphicsElement = null;
@@ -1027,25 +996,17 @@ namespace Uno.UI {
 					this.containerElement.appendChild(unconnectedRoot);
 				}
 
-				return element.getBBox();
+				let bbox = element.getBBox();
+
+				return [
+					bbox.x,
+					bbox.y,
+					bbox.width,
+					bbox.height];
 			}
 			finally {
 				cleanupUnconnectedRoot(this.containerElement);
 			}
-
-		}
-
-		public setSvgElementRect(pParams: number): boolean {
-			const params = WindowManagerSetSvgElementRectParams.unmarshal(pParams);
-
-			const element = this.getView(params.HtmlId) as any;
-
-			element.x.baseVal.value = params.X;
-			element.y.baseVal.value = params.Y;
-			element.width.baseVal.value = params.Width;
-			element.height.baseVal.value = params.Height;
-
-			return true;
 		}
 
 		/**
@@ -1395,7 +1356,7 @@ namespace Uno.UI {
 				if ((<any>globalThis).DotnetExports !== undefined) {
 					WindowManager.setDependencyPropertyValueMethod = (<any>globalThis).DotnetExports.UnoUI.Uno.UI.Helpers.Automation.SetDependencyPropertyValue;
 				} else {
-					WindowManager.setDependencyPropertyValueMethod = (<any>Module).mono_bind_static_method("[Uno.UI] Uno.UI.Helpers.Automation:SetDependencyPropertyValue");
+					throw `Unable to find dotnet exports`;
 				}
 			}
 
@@ -1437,22 +1398,9 @@ namespace Uno.UI {
 				WindowManager.dispatchEventMethod = exports.Microsoft.UI.Xaml.UIElement.DispatchEvent;
 				WindowManager.focusInMethod = exports.Microsoft.UI.Xaml.Input.FocusManager.ReceiveFocusNative;
 				WindowManager.dispatchSuspendingMethod = exports.Microsoft.UI.Xaml.Application.DispatchSuspending;
+				WindowManager.keyTrackingMethod = (<any>globalThis).DotnetExports.Uno.Uno.UI.Core.KeyboardStateTracker.UpdateKeyStateNative;
 			} else {
-				if (!WindowManager.resizeMethod) {
-					WindowManager.resizeMethod = (<any>Module).mono_bind_static_method("[Uno.UI] Microsoft.UI.Xaml.Window:Resize");
-				}
-
-				if (!WindowManager.dispatchEventMethod) {
-					WindowManager.dispatchEventMethod = (<any>Module).mono_bind_static_method("[Uno.UI] Microsoft.UI.Xaml.UIElement:DispatchEvent");
-				}
-
-				if (!WindowManager.focusInMethod) {
-					WindowManager.focusInMethod = (<any>Module).mono_bind_static_method("[Uno.UI] Microsoft.UI.Xaml.Input.FocusManager:ReceiveFocusNative");
-				}
-
-				if (!WindowManager.dispatchSuspendingMethod) {
-					WindowManager.dispatchSuspendingMethod = (<any>Module).mono_bind_static_method("[Uno.UI] Microsoft.UI.Xaml.Application:DispatchSuspending");
-				}
+				throw `Unable to find dotnet exports`;
 			}
 		}
 
@@ -1464,6 +1412,13 @@ namespace Uno.UI {
 			}
 			document.body.addEventListener("focusin", this.onfocusin);
 			document.body.appendChild(this.containerElement);
+
+			// On WASM, if no one subscribes to key<Down|Up>, not only will the event not fire on any UIElement,
+			// but the browser won't even notify us that a key was pressed/released, and this breaks KeyboardStateTracker
+			// key tracking, which depends on RaiseEvent being called even if no one is subscribing. Instead, we
+			// subscribe on the body and make sure to call KeyboardStateTracker ourselves here.
+			document.body.addEventListener("keydown", this.onBodyKeyDown);
+			document.body.addEventListener("keyup", this.onBodyKeyUp);
 
 			window.addEventListener("resize", x => WindowManager.resize());
 			window.addEventListener("contextmenu", x => {
@@ -1606,6 +1561,140 @@ namespace Uno.UI {
 
 		public moveWindow(x: number, y: number) {
 			window.moveTo(x, y);
+		}
+
+		private onBodyKeyDown(event: KeyboardEvent) {
+			WindowManager.keyTrackingMethod(event.key, true);
+		}
+
+		private onBodyKeyUp(event: KeyboardEvent) {
+			WindowManager.keyTrackingMethod(event.key, false);
+		}
+
+		private getCssColorOrUrlRef(color: number, paintRef: number): string {
+			if (paintRef != null) {
+				return `url(#${paintRef})`;
+			}
+			else if (color != null) {
+				// JSInvoke doesnt allow passing of uint, so we had to deal with int's "sign-ness" here
+				// (-1 >>> 0) is a quick hack to turn signed negative into "unsigned" positive
+				// padded to 8-digits 'RRGGBBAA', so the value doesnt get processed as 'RRGGBB' or 'RGB'.
+				return `#${(color >>> 0).toString(16).padStart(8, '0')}`;
+			}
+			else {
+				return '';
+			}
+		}
+
+		public setShapeFillStyle(elementId: number, color: number, paintRef: number): void {
+			const e = this.getView(elementId);
+			if (e instanceof SVGElement) {
+				e.style.fill = this.getCssColorOrUrlRef(color, paintRef);
+			}
+		}
+
+		public setShapeStrokeStyle(elementId: number, color: number, paintRef: number): void {
+			const  e = this.getView(elementId);
+			if (e instanceof SVGElement) {
+				e.style.stroke = this.getCssColorOrUrlRef(color, paintRef);
+			}
+		}
+
+		public setShapeStrokeWidthStyle(elementId: number, strokeWidth: number): void {
+			const  e = this.getView(elementId);
+			if (e instanceof SVGElement) {
+				e.style.strokeWidth = `${strokeWidth}px`;
+			}
+		}
+
+		public setShapeStrokeDashArrayStyle(elementId: number, strokeDashArray: number[]): void {
+			const  e = this.getView(elementId);
+			if (e instanceof SVGElement) {
+
+				e.style.strokeDasharray = strokeDashArray.join(',');
+			}
+		}
+
+		public setShapeStylesFast1(elementId: number, fillColor: number, fillPaintRef: number, strokeColor: number, strokePaintRef: number): void {
+			const  e = this.getView(elementId);
+			if (e instanceof SVGElement) {
+
+				e.style.fill = this.getCssColorOrUrlRef(fillColor, fillPaintRef);
+				e.style.stroke = this.getCssColorOrUrlRef(strokeColor, strokePaintRef);
+			}
+		}
+
+		public setShapeStylesFast2(elementId: number, fillColor: number, fillPaintRef: number, strokeColor: number, strokePaintRef: number, strokeWidth: number, strokeDashArray: any[]): void {
+			const  e = this.getView(elementId);
+			if (e instanceof SVGElement) {
+
+				e.style.fill = this.getCssColorOrUrlRef(fillColor, fillPaintRef);
+				e.style.stroke = this.getCssColorOrUrlRef(strokeColor, strokePaintRef);
+				e.style.strokeWidth = `${strokeWidth}px`;
+				e.style.strokeDasharray = strokeDashArray.join(',');
+			}
+		}
+
+		public setSvgFillRule(htmlId: number, nonzero: boolean): void {
+			const e = this.getView(htmlId);
+			if (e instanceof SVGPathElement) {
+				e.setAttribute('fill-rule', nonzero ? 'nonzero' : 'evenodd');
+			}
+		}
+
+		public setSvgEllipseAttributes(htmlId: number, cx: number, cy: number, rx: number, ry: number): void {
+			const e = this.getView(htmlId);
+			if (e instanceof SVGEllipseElement) {
+				e.cx.baseVal.value = cx;
+				e.cy.baseVal.value = cy;
+				e.rx.baseVal.value = rx;
+				e.ry.baseVal.value = ry;
+			}
+		}
+
+		public setSvgLineAttributes(htmlId: number, x1: number, x2: number, y1: number, y2: number): void {
+			const e = this.getView(htmlId);
+			if (e instanceof SVGLineElement) {
+				e.x1.baseVal.value = x1;
+				e.x2.baseVal.value = x2;
+				e.y1.baseVal.value = y1;
+				e.y2.baseVal.value = y2;
+			}
+		}
+
+		public setSvgPathAttributes(htmlId: number, nonzero: boolean, data: string): void {
+			const e = this.getView(htmlId);
+			if (e instanceof SVGPathElement) {
+				e.setAttribute('fill-rule', nonzero ? 'nonzero' : 'evenodd');
+				e.setAttribute('d', data);
+			}
+		}
+
+		public setSvgPolyPoints(htmlId: number, points: number[]): void {
+			const e = this.getView(htmlId);
+			if (e instanceof SVGPolygonElement || e instanceof SVGPolylineElement) {
+				if (points != null) {
+					const delimiters = [' ', ','];
+					// interwave to produce: x0,y0 x1,y1 ...
+					// i start at 1
+					e.setAttribute('points', points.reduce((acc, x, i) => acc + delimiters[i % delimiters.length] + x, ''));
+				}
+				else {
+					e.removeAttribute('points');
+				}
+			}
+		}
+
+		public setSvgRectangleAttributes(htmlId: number, x: number, y: number, width: number, height: number, rx: number, ry: number): void {
+			const e = this.getView(htmlId);
+			if (e instanceof SVGRectElement) {
+				e.x.baseVal.value = x;
+				e.y.baseVal.value = y;
+				e.width.baseVal.value = width;
+				e.height.baseVal.value = height;
+				e.rx.baseVal.value = rx;
+				e.ry.baseVal.value = ry;
+			}
 		}
 	}
 

@@ -40,6 +40,7 @@ namespace Microsoft.UI.Xaml.Controls
 	{
 		private InlineCollection _inlines;
 		private string _inlinesText; // Text derived from the content of Inlines
+		private IDisposable _foregroundBrushChangedSubscription;
 
 #if !__WASM__
 		// Used for text selection which is handled natively
@@ -304,7 +305,7 @@ namespace Microsoft.UI.Xaml.Controls
 			UpdateInlines(newValue);
 
 #if __SKIA__
-			if (TemplatedParent is not TextBox textBox || textBox.TextBoxView?.DisplayBlock != this)
+			if (GetTemplatedParent() is not TextBox textBox || textBox.TextBoxView?.DisplayBlock != this)
 #endif
 			{
 				// On skia, we don't want to set the selection here in case TextBox is managing the selection.
@@ -485,7 +486,9 @@ namespace Microsoft.UI.Xaml.Controls
 		private void Subscribe(Brush oldValue, Brush newValue)
 		{
 			var newOnInvalidateRender = _foregroundChanged ?? (() => OnForegroundChanged());
-			Brush.SetupBrushChanged(oldValue, newValue, ref _foregroundChanged, newOnInvalidateRender);
+
+			_foregroundBrushChangedSubscription?.Dispose();
+			_foregroundBrushChangedSubscription = Brush.SetupBrushChanged(newValue, ref _foregroundChanged, newOnInvalidateRender);
 		}
 
 		private void OnForegroundChanged()

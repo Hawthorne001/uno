@@ -4,20 +4,24 @@ uid: Uno.Features.HotReload
 
 # Hot Reload
 
-The Uno Platform Hot Reload feature provides a way to modify the XAML and C# of your running application, in order to iterate faster on UI or code changes. This makes the inner developer loop faster.
+The Uno Platform **Hot Reload** feature provides a way to modify the XAML and C# of your running application, in order to iterate faster on UI or code changes. This makes the inner developer loop faster.
+
+**Hot Reload** is part of the **Uno Platform Studio**, a suite of tools designed to streamline your cross-platform app development and boost productivity.
+
+[➜ Learn more about Uno Platform Studio](xref:Uno.Platform.Studio.Overview)
 
 ## Features
 
-- Supported in **Visual Studio 2022** (Windows), **VS Code** (Linux, macOS, Windows, CodeSpaces, and GitPod) and Rider (Linux, macOS, Windows)
+- Supported in **Visual Studio 2022** (Windows), **VS Code** (Linux, macOS, Windows, CodeSpaces, and GitPod) and **Rider** (Linux, macOS, Windows)
 - XAML and [C# Markup](xref:Uno.Extensions.Markup.Overview) Hot Reload for **iOS, Catalyst, Android, WebAssembly, and Skia (X11, Windows, macOS and FrameBuffer)**
 - All **[C# of Hot Reload](https://learn.microsoft.com/visualstudio/debugger/hot-reload)** in both Visual Studio and VS Code. See [supported code changes](https://learn.microsoft.com/visualstudio/debugger/supported-code-changes-csharp).
 - **Simulator and physical devices** support
-- Hot Reload **Indicator** visuals for an enhanced development experience on Uno Platform targets
+- **Hot Reload Indicator** visuals for an enhanced development experience on Uno Platform targets (not currently supported on WinAppSDK target)
 - What can be Hot Reloaded:
   - **XAML files** in the **main project** and **referenced projects libraries**
   - **C# Markup controls**
   - **Bindings**
-  - Full **x:Bind expressions**
+  - **x:Bind expressions**
   - **App.xaml** and **referenced resource dictionaries**
   - **DataTemplates**
   - **Styles**
@@ -103,7 +107,7 @@ Hot Reload features vary between platforms and IDE, you can check below the list
         </tr>
         <tr>
             <td>WinAppSDK</td>
-            <td>✅🐞</td><td>✅🐞</td>
+            <td>✅<sup><a href="#hr-footnotes">[5]</a></sup>🐞</td><td>✅🐞</td>
             <td>🔳</td><td>🔳</td>
             <td>🔳</td><td>🔳</td>
         </tr>
@@ -243,6 +247,7 @@ Legend:
 - [2]: Support is [not available](https://youtrack.jetbrains.com/issue/RIDER-53302/launchSettings.json-WSL2-command-support).
 - [3]: C# Hot Reload is affected by a [.NET Runtime issue](https://github.com/dotnet/android/issues/9120).
 - [4]: XAML Hot Reload is using the XAML Reader, [pending C# Hot Reload update](https://github.com/unoplatform/uno/issues/15918) and a [VS/VS Code update](https://developercommunity.visualstudio.com/t/net70-iosnet70-android-MetadataUpd/10279604).
+- [5]: C# Markup Hot Reload is supported when running in Unpackaged mode only
 
 ## Supported features per Platform
 
@@ -292,10 +297,13 @@ Mobile targets are currently using a limited version of XAML Hot Reload and do n
 
 ## Hot Reload Indicator
 
-Hot Reload displays a visual indicator to help you further monitor changes while developing. It displays new information every time Hot Reload is triggered. The indicator is enabled by default within the `EnableHotReload()` method which is located in the root `App.xaml.cs` file. This displays an overlay which hosts the visual indicator. If you wish to disable it, you simply have to provide the following boolean: `EnableHotReload(disableIndicator: true)`, removing the overlay from the view.
+> [!NOTE]
+> The Hot Reload indicator is currently not supported for the WinAppSDK target
+
+Hot Reload displays a visual indicator to help you further monitor changes while developing. It displays new information every time Hot Reload is triggered. The indicator is enabled by default within the `UseStudio()` method which is located in the root `App.xaml.cs` file. This displays an overlay that hosts the visual indicator. If you wish to disable it, you simply have to provide the following boolean: `UseStudio(showHotReloadIndicator: false)`, removing the overlay from the view.
 
 <p align="center">
-  <img src="../Assets/features/hotreload/indicator.png" alt="A hot reload visual indicator" />
+  <img src="~/articles/Assets/features/hotreload/indicator.png" alt="A hot reload visual indicator" />
 </p>
 
 > [!TIP]
@@ -304,7 +312,7 @@ Hot Reload displays a visual indicator to help you further monitor changes while
 The indicator displays the current connection status. Clicking on it will open a flyout containing all events or changes that were applied by Hot Reload. These events display more details about Hot Reload changes, such as its status and impacted files.
 
 <p align="center">
-  <img src="../Assets/features/hotreload/indicator-flyout.png" alt="A window showing events from Hot Reload" />
+  <img src="~/articles/Assets/features/hotreload/indicator-flyout.png" alt="A window showing events from Hot Reload" />
 </p>
 
 ### Statuses
@@ -369,11 +377,11 @@ Here's a summary of what icons and statuses you can expect:
     //... in the OnLaunched method
 
     #if DEBUG
-            MainWindow.EnableHotReload();
+            MainWindow.UseStudio();
     #endif
     ```
 
-### [**Visual Studio 2022**](#tab/vswin)
+### [**Visual Studio 2022**](#tab/vswints)
 
 - Make sure that **C# Hot Reload** is not disabled in Visual Studio
   - Open Tools / Options
@@ -385,9 +393,10 @@ The output window in Visual Studio has an output named `Uno Platform` in its dro
 - For `net8.0-windows10.xx`:
   - Ensure that the `net8.0-windows10.xxx` target framework **is selected in the top-left dropdown list of the XAML editor**. Selecting any other platform will break hot reload.
   - [A VS issue for WinUI may be hit](https://developercommunity.visualstudio.com/t/net80-windows10-needs-to-be-first-for-W/10643724). If XAML hot reload does not work, ensure that the `Uno Platform` output window exists, and that it mentions that the extension has successfully loaded. To do so, try closing and reopening the solution, and make sure that the [Visual Studio extension is installed](xref:Uno.GetStarted.vs2022).
+  - [A known VS issue for WinUI](https://github.com/microsoft/microsoft-ui-xaml/issues/5944) breaks hot reload when using "simplified" `RowDefinitions`/`ColumnDefinitions`.
 - If the indicator is red and indicates that connection failed, make sure that you have the latests versions of Uno.SDK and the VS extension, then rebuild your application.
 
-### [**Visual Studio Code**](#tab/vscode)
+### [**Visual Studio Code**](#tab/vscodets)
 
 - Hot Reload **is not supported for WebAssembly and Skia Desktop** when using the debugger. Start your app using `Ctrl+F5`.
 - The output window in Code has an output named **Uno Platform - Hot Reload** in its drop-down. Diagnostics messages from the extension appear there.
@@ -399,7 +408,7 @@ The output window in Visual Studio has an output named `Uno Platform` in its dro
 - When working on Skia Desktop apps, make sure to start the app without the debugger, and make sure that in the debugger tab, the `Uno Platform Desktop (Debug)` target is selected.
 - The TCP port number used by the app to connect back to the IDE is located in the `obj/Debug/net8.0-XXX/RemoteControl.config` file. If the port number does not match with the one found in the **Uno Platform - Hot Reload** output window, restart Code or use `Developer: Reload Window` in the command palette.
 
-### [**Rider**](#tab/rider)
+### [**Rider**](#tab/riderts)
 
 - Hot Reload **is not supported** when using the debugger. Start your app without the debugger.
 - The output window in Rider has an output named **Uno Platform** in its sidebar. Diagnostics messages from the extension appear there.
