@@ -5,6 +5,8 @@ using Windows.Foundation;
 using Windows.System;
 using Foundation;
 using UIKit;
+using Uno.UI.Xaml.Core;
+using Uno.UI.Xaml.Input;
 
 #if HAS_UNO_WINUI
 using Microsoft.UI.Input;
@@ -57,12 +59,23 @@ namespace Microsoft.UI.Xaml.Input
 			KeyModifiers = VirtualKeyModifiers.None;
 			OriginalSource = originalSource;
 
+			var inputManager = VisualTree.GetContentRootForElement(originalSource)?.InputManager;
+			if (inputManager is not null)
+			{
+				inputManager.LastInputDeviceType = deviceType switch
+				{
+					PointerDeviceType.Mouse => InputDeviceType.Mouse,
+					PointerDeviceType.Pen => InputDeviceType.Pen,
+					_ => InputDeviceType.Touch
+				};
+			}
+
 			_properties = GetProperties(); // Make sure to capture the properties state so we can re-use them in "mixed" ctor
 		}
 
 		public PointerPoint GetCurrentPoint(UIElement relativeTo)
 		{
-			var timestamp = ToTimeStamp(_nativeTouch.Timestamp);
+			var timestamp = ToTimestamp(_nativeTouch.Timestamp);
 			var device = global::Windows.Devices.Input.PointerDevice.For((global::Windows.Devices.Input.PointerDeviceType)Pointer.PointerDeviceType);
 			var rawPosition = (Point)_nativeTouch.GetPreciseLocation(null);
 			var position = relativeTo == null
@@ -97,13 +110,11 @@ namespace Microsoft.UI.Xaml.Input
 			};
 
 		#region Misc static helpers
-		private static long? _bootTime;
 
-		private static ulong ToTimeStamp(double timestamp)
+		private static ulong ToTimestamp(double nativeTimestamp)
 		{
-			_bootTime ??= DateTime.UtcNow.Ticks - (long)(TimeSpan.TicksPerSecond * new NSProcessInfo().SystemUptime);
-
-			return (ulong)_bootTime.Value + (ulong)(TimeSpan.TicksPerSecond * timestamp);
+			// iOS Timestamp is in seconds from boot time, convert to microseconds.
+			return (ulong)(nativeTimestamp * 1000 * 1000);
 		}
 
 		private static double? _firstTimestamp;

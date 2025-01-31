@@ -36,7 +36,6 @@ You can use the `UnoFeatures` property in the `csproj` or `Directory.Build.props
     Serialization;
     Localization;
     Navigation;
-    OpenSans;
 </UnoFeatures>
 ```
 
@@ -75,9 +74,9 @@ Here are the supported features:
 | `Dsp`                | Adds support for the [Uno.Dsp.Tasks packages](https://www.nuget.org/packages?q=uno.dsp.tasks).                                                                                                                                             |
 | `Prism`              | Adds [Prism](https://github.com/PrismLibrary/Prism) support for Uno Platform applications WinUI.                                                                                                                                           |
 | `Skia`               | Adds support for [SkiaSharp](https://github.com/mono/SkiaSharp).                                                                                                                                                                           |
+| `GLCanvas`               | Adds support for the [OpenGL Canvas](xref:Uno.Controls.GLCanvasElement).                                                                                                                                                                           |
 | `Svg`                | [SVG](xref:Uno.Features.SVG) support for iOS, Android, and Mac Catalyst. This option is not needed when only targeting WebAssembly and WinAppSDK.                                                                                          |
 | `Lottie`             | Adds support for [Lottie animations](xref:Uno.Features.Lottie).                                                                                                                                                                            |
-| `OpenSans`             | Adds support for the [Open Sans](https://github.com/unoplatform/uno.fonts#open-sans-font) font, and sets it as the [default text font](xref:Uno.Features.CustomFonts#default-text-font).                                                                                                                                                                            |
 
 ## Implicit Packages
 
@@ -244,6 +243,20 @@ By Default when using the Uno.Sdk you get the added benefit of default includes 
 - `*.Android.cs`
 
 As discussed above setting `EnableDefaultUnoItems` to false will disable these includes.
+
+> [!TIP]
+> When you need to exclude specific files from a particular target framework (such as WebAssembly), you can use a custom MSBuild target:
+>
+> ```xml
+> <Target Name="AdjustAppItemGroups" BeforeTargets="ResolveAssemblyReferences">
+>     <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-browserwasm'">
+>         <None Remove="Page.xaml"/>
+>         <Page Remove="Page.xaml"/>
+>     </ItemGroup>
+> </Target>
+> ```
+>
+> This approach allows you to selectively remove pages from specific target frameworks while maintaining them in others.
 
 ## Apple Privacy Manifest Support
 

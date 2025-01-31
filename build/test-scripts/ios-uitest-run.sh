@@ -92,7 +92,7 @@ export UNO_TESTS_LOCAL_TESTS_FILE=$BUILD_SOURCESDIRECTORY/src/SamplesApp/Samples
 export UNO_UITEST_BENCHMARKS_PATH=$BUILD_ARTIFACTSTAGINGDIRECTORY/benchmarks/ios-automated
 export UNO_UITEST_RUNTIMETESTS_RESULTS_FILE_PATH=$BUILD_SOURCESDIRECTORY/build/RuntimeTestResults-ios-automated.xml
 
-export UNO_UITEST_SIMULATOR_VERSION="com.apple.CoreSimulator.SimRuntime.iOS-17-2"
+export UNO_UITEST_SIMULATOR_VERSION="com.apple.CoreSimulator.SimRuntime.iOS-17-5"
 export UNO_UITEST_SIMULATOR_NAME="iPad Pro (12.9-inch) (6th generation)"
 
 export UnoTargetFrameworkOverride="net8.0-ios17.0"
@@ -287,14 +287,18 @@ if [ ! -f "$UNO_ORIGINAL_TEST_RESULTS" ]; then
 fi
 
 echo "Copying crash reports"
-cp -R ~/Library/Logs/DiagnosticReports/* $LOG_FILE_DIRECTORY
+cp -R ~/Library/Logs/DiagnosticReports/* $LOG_FILE_DIRECTORY || true
 
 pushd $BUILD_SOURCESDIRECTORY/src/Uno.NUnitTransformTool
 mkdir -p $(dirname ${UNO_TESTS_FAILED_LIST})
 
-# Fail the build on empty results
-dotnet run fail-empty $UNO_ORIGINAL_TEST_RESULTS $UNO_TESTS_FAILED_LIST
+echo "Running NUnitTransformTool"
 
-## Export the failed tests list for reuse in a pipeline retry
-dotnet run list-failed $UNO_ORIGINAL_TEST_RESULTS $UNO_TESTS_FAILED_LIST
+## Fail the build when no test results could be read
+dotnet run fail-empty $UNO_ORIGINAL_TEST_RESULTS
+
+if [ $? -eq 0 ]; then
+	dotnet run list-failed $UNO_ORIGINAL_TEST_RESULTS $UNO_TESTS_FAILED_LIST
+fi
+
 popd
