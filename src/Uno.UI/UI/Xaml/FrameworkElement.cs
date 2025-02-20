@@ -73,6 +73,8 @@ namespace Microsoft.UI.Xaml
 
 		private bool _defaultStyleApplied;
 
+		private ResourceDictionary _resources;
+
 		private static readonly Uri DefaultBaseUri = new Uri("ms-appx://local");
 
 		private string _baseUriFromParser;
@@ -249,7 +251,6 @@ namespace Microsoft.UI.Xaml
 #if !UNO_REFERENCE_API
 			_layouter = new FrameworkElementLayouter(this, MeasureOverride, ArrangeOverride);
 #endif
-			Resources = new Microsoft.UI.Xaml.ResourceDictionary();
 
 			IFrameworkElementHelper.Initialize(this);
 		}
@@ -260,8 +261,20 @@ namespace Microsoft.UI.Xaml
 #endif
 		Microsoft.UI.Xaml.ResourceDictionary Resources
 		{
-			get; set;
+			get => _resources ??= new ResourceDictionary();
+			set
+			{
+				_resources = value;
+				_resources.InvalidateNotFoundCache(true);
+			}
 		}
+
+		/// <summary>
+		/// Tries getting the ResourceDictionary without initializing it.
+		/// </summary>
+		/// <returns>A ResourceDictionary instance or null</returns>
+		internal Microsoft.UI.Xaml.ResourceDictionary TryGetResources()
+			=> _resources;
 
 		/// <summary>
 		/// Gets the parent of this FrameworkElement in the object tree.
@@ -273,6 +286,10 @@ namespace Microsoft.UI.Xaml
 		DependencyObject Parent =>
 			LogicalParentOverride ??
 			((IDependencyObjectStoreProvider)this).Store.Parent as DependencyObject;
+
+#if !__NETSTD_REFERENCE__
+		internal bool HasParent() => Parent != null;
+#endif
 
 		public global::System.Uri BaseUri
 		{
@@ -669,7 +686,7 @@ namespace Microsoft.UI.Xaml
 		[GeneratedDependencyProperty(DefaultValue = true, Options = FrameworkPropertyMetadataOptions.Inherits)]
 		public static DependencyProperty AllowFocusOnInteractionProperty { get; } = CreateAllowFocusOnInteractionProperty();
 
-		internal
+		internal virtual
 #if __ANDROID__
 			new
 #endif
@@ -952,7 +969,7 @@ namespace Microsoft.UI.Xaml
 		/// </summary>
 		internal virtual void UpdateThemeBindings(ResourceUpdateReason updateReason)
 		{
-			Resources?.UpdateThemeBindings(updateReason);
+			TryGetResources()?.UpdateThemeBindings(updateReason);
 			(this as IDependencyObjectStoreProvider).Store.UpdateResourceBindings(updateReason);
 
 			if (updateReason == ResourceUpdateReason.ThemeResource)
@@ -1048,5 +1065,49 @@ namespace Microsoft.UI.Xaml
 			protected override Size MeasureOverride(Size availableSize) => _measureOverrideHandler(availableSize);
 		}
 #endif
+
+		private protected virtual FrameworkTemplate/*?*/ GetTemplate()
+		{
+			return null;
+		}
+
+		// WinUI overrides this in CalendarViewBaseItemChrome, ListViewBaseItemChrome, and MediaPlayerElement.
+		private protected virtual bool HasTemplateChild()
+		{
+			return GetFirstChild() is not null;
+		}
+
+		internal UIElement GetFirstChildNoAddRef() => GetFirstChild();
+
+		internal virtual UIElement/*?*/ GetFirstChild()
+		{
+#if __CROSSRUNTIME__ && !__NETSTD_REFERENCE__
+			if (GetChildren() is { Count: > 0 } children)
+			{
+				return children[0] as UIElement;
+			}
+#elif XAMARIN
+			if (this is IShadowChildrenProvider { ChildrenShadow: { Count: > 0 } childrenShadow })
+			{
+				return childrenShadow[0] as UIElement;
+			}
+#endif
+
+			if (VisualTreeHelper.GetChildrenCount(this) > 0)
+			{
+				return VisualTreeHelper.GetChild(this, 0) as UIElement;
+			}
+
+			return null;
+		}
+
+		internal DependencyObject GetTemplatedParent()
+		{
+			return (this as IDependencyObjectStoreProvider)?.Store.GetTemplatedParent2();
+		}
+		internal void SetTemplatedParent(DependencyObject tp)
+		{
+			(this as IDependencyObjectStoreProvider)?.Store.SetTemplatedParent2(tp);
+		}
 	}
 }

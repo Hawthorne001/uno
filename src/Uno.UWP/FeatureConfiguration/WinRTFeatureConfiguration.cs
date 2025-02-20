@@ -35,4 +35,24 @@ public static partial class WinRTFeatureConfiguration
 		/// </summary>
 		public static bool PreserveParsedResources { get; set; }
 	}
+
+#if __ANDROID__
+	public static class StoreContext
+	{
+		/// <summary>
+		/// Set True to test Store Context APIs on Android. False by default.
+		/// </summary>
+		public static bool TestMode { get; set; }
+	}
+#endif
+
+#if DEBUG
+	internal static class DebugOptions
+	{
+		/// <summary>
+		/// Adjusts all PointerPoint instances as if they were of type Touch.
+		/// </summary>
+		public static bool SimulateTouch { get; set; }
+	}
+#endif
 }

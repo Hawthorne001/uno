@@ -8,7 +8,7 @@ using static __Uno.UI.Xaml.Controls.NativeWindowWrapper;
 
 namespace Uno.UI.Xaml.Controls;
 
-internal partial class NativeWindowWrapper : NativeWindowWrapperBase
+internal partial class NativeWindowWrapper : NativeWindowWrapperBase, INativeWindowWrapper
 {
 	private static readonly Lazy<NativeWindowWrapper> _instance = new(() => new NativeWindowWrapper());
 
@@ -23,14 +23,6 @@ internal partial class NativeWindowWrapper : NativeWindowWrapperBase
 	}
 
 	public override object NativeWindow => null;
-
-	public override void Activate()
-	{
-	}
-
-	public override void Close()
-	{
-	}
 
 	private void DispatchDpiChanged() =>
 		RasterizationScale = (float)_displayInformation.RawPixelsPerViewPixel;
@@ -47,7 +39,7 @@ internal partial class NativeWindowWrapper : NativeWindowWrapperBase
 
 		Bounds = bounds;
 		VisibleBounds = bounds;
-		Size = bounds.Size.ToSizeInt32();
+		Size = new((int)(bounds.Width * RasterizationScale), (int)(bounds.Height * RasterizationScale));
 	}
 
 	protected override void ShowCore()

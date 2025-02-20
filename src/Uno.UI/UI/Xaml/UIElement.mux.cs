@@ -587,7 +587,7 @@ namespace Microsoft.UI.Xaml
 		protected virtual IEnumerable<DependencyObject>? GetChildrenInTabFocusOrder()
 		{
 			var children = FocusProperties.GetFocusChildren(this);
-			if (children != null && /*!children.IsLeaving() && */children.Length > 0)
+			if (children != null && /*!children.IsLeaving() && */children.Count > 0)
 			{
 				return children;
 			}
@@ -1072,7 +1072,7 @@ namespace Microsoft.UI.Xaml
 			// are entered as well.
 			// The property we currently know it has an effect is Resources
 			// In WinUI, it happens in CDependencyObject::EnterImpl (the call to EnterSparseProperties)
-			if (this is FrameworkElement { Resources: { } resources })
+			if (this is FrameworkElement fe && fe.TryGetResources() is { } resources)
 			{
 				// Using ValuesInternal to avoid Enumerator boxing
 				foreach (var resource in resources.ValuesInternal)
@@ -1933,5 +1933,7 @@ namespace Microsoft.UI.Xaml
 
 		internal virtual bool WantsScrollViewerToObscureAvailableSizeBasedOnScrollBarVisibility(Orientation horizontal)
 			=> true;
+
+		internal bool IsNonClippingSubtree { get; set; }
 	}
 }

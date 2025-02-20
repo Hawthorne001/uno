@@ -5,15 +5,29 @@ using System.Text;
 
 namespace Uno.UI.RemoteControl;
 
-internal record RemoteControlStatus(
+public record RemoteControlStatus(
 	RemoteControlStatus.ConnectionState State,
+	RemoteControlStatus.ConnectionError? Error,
 	bool? IsVersionValid,
 	(RemoteControlStatus.KeepAliveState State, long RoundTrip) KeepAlive,
 	ImmutableHashSet<RemoteControlStatus.MissingProcessor> MissingRequiredProcessors,
 	(long Count, ImmutableHashSet<Type> Types) InvalidFrames)
 {
-	public bool IsAllGood => State == ConnectionState.Connected && IsVersionValid == true && MissingRequiredProcessors.IsEmpty && KeepAlive.State == KeepAliveState.Ok && InvalidFrames.Count == 0;
 
+	/// <summary>
+	/// An ***aggregated*** state of the connection to determine if everything is fine.
+	/// This is for visual representation only, the actual state of the connection is in <see cref="State"/>.
+	/// </summary>
+	public bool IsAllGood =>
+		State == ConnectionState.Connected
+		&& IsVersionValid == true
+		&& MissingRequiredProcessors.IsEmpty
+		&& KeepAlive.State == KeepAliveState.Ok
+		&& InvalidFrames.Count == 0;
+
+	/// <summary>
+	/// Not <see cref="IsAllGood"/> (for binding purposes).
+	/// </summary>
 	public bool IsProblematic => !IsAllGood;
 
 	public (Classification kind, string message) GetSummary()
@@ -82,9 +96,9 @@ internal record RemoteControlStatus(
 		return details.ToString();
 	}
 
-	internal record struct MissingProcessor(string TypeFullName, string Version, string Details, string? Error = null);
+	public readonly record struct MissingProcessor(string TypeFullName, string Version, string Details, string? Error = null);
 
-	internal enum KeepAliveState
+	public enum KeepAliveState
 	{
 		Idle,
 		Ok, // Got ping/pong in expected delays
@@ -93,7 +107,7 @@ internal record RemoteControlStatus(
 		Aborted // KeepAlive was aborted
 	}
 
-	internal enum ConnectionState
+	public enum ConnectionState
 	{
 		/// <summary>
 		/// Client as not been started yet
@@ -140,7 +154,26 @@ internal record RemoteControlStatus(
 		Disconnected
 	}
 
-	internal enum Classification
+	public enum ConnectionError
+	{
+		/// <summary>
+		/// There is no <see cref="ServerEndpointAttribute"/> configured in the application assembly.
+		/// This is usually because the application was built in release.
+		/// </summary>
+		NoEndpoint,
+
+		/// <summary>
+		/// Found some <see cref="ServerEndpointAttribute"/> but none of them have a port number configured.
+		/// This is usually either:
+		///		1. Application was not built in the IDE
+		///		2. Uno's extension has not been installed in the IDE
+		///		3. Uno's extension has not been loaded yet by the IDE (machine is slow, request for the user to wait before relaunching the application using F5)
+		///		4. Uno's extension ís out-dated and needs to be updated (code or rider)
+		/// </summary>
+		EndpointWithoutPort,
+	}
+
+	public enum Classification
 	{
 		Ok,
 		Info,

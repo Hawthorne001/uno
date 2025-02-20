@@ -201,13 +201,18 @@ namespace Microsoft.UI.Xaml.Controls
 		internal void Initialize(_Panel owner)
 		{
 			OwnerPanel = owner ?? throw new ArgumentNullException(nameof(owner));
-			OwnerPanel.Loaded += OnLoaded;
+			// It's necessary to subscribe to Loading not Loaded to fire this before
+			// the first Measure during/after loading. If during the first measure
+			// ScrollViewer and ItemsControl are not set, this will cause the
+			// DesiredSize to be zero and this causes cascading problems specifically
+			// with ListView. cf. https://github.com/unoplatform/kahua-private/issues/257
+			OwnerPanel.Loading += OnLoading;
 			OwnerPanel.Unloaded += OnUnloaded;
 
 			Generator = new VirtualizingPanelGenerator(this);
 		}
 
-		private void OnLoaded(object sender, RoutedEventArgs e)
+		private void OnLoading(FrameworkElement frameworkElement, object args)
 		{
 			foreach (var parent in OwnerPanel.GetVisualAncestry())
 			{
@@ -236,13 +241,13 @@ namespace Microsoft.UI.Xaml.Controls
 				this.Log().LogDebug($"Calling {GetMethodTag()} hasPopupPanelParent={hasPopupPanelParent} hasListViewParent={hasListViewParent}");
 			}
 
-			if (
-				ItemsControl == null
-				&& OwnerPanel.TemplatedParent is ItemsControl popupItemsControl
-			)
+			if (IsInsidePopup)
 			{
-				// This case is for an ItemsPresenter hosted in a Popup
-				ItemsControl = popupItemsControl;
+				// The items-control may not exist in the direct visual-tree,
+				// if it is defined within a popup/flyout, as in the case of ComboBox.
+				ItemsControl = OwnerPanel
+					.FindFirstParent<PopupPanel>()?.Popup
+					?.FindFirstParent<ItemsControl>();
 
 				// If measure has already happened when ItemsControl was null, it should be invalidated.
 				OwnerPanel.InvalidateMeasure();

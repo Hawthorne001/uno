@@ -62,6 +62,8 @@ namespace Microsoft.UI.Xaml.Controls
 
 		private Action _selectionHighlightColorChanged;
 		private Action _foregroundBrushChanged;
+		private IDisposable _selectionHighlightBrushChangedSubscription;
+		private IDisposable _foregroundBrushChangedSubscription;
 #pragma warning restore CS0067, CS0649
 
 		private ContentPresenter _header;
@@ -169,6 +171,10 @@ namespace Microsoft.UI.Xaml.Controls
 					scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled; // The template sets this to Hidden
 					scrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Auto; // The template sets this to Hidden
 				}
+
+#if __WASM__
+				scrollViewer.DisableSetFocusOnPopupByPointer = !IsPointerCaptureRequired;
+#endif
 #endif
 			}
 		}
@@ -322,7 +328,14 @@ namespace Microsoft.UI.Xaml.Controls
 
 			var focusManager = VisualTree.GetFocusManagerForElement(this);
 			if (focusManager?.FocusedElement != this &&
-				GetBindingExpression(TextProperty) is { ParentBinding.UpdateSourceTrigger: UpdateSourceTrigger.Default or UpdateSourceTrigger.LostFocus } bindingExpression)
+				GetBindingExpression(TextProperty) is
+				{
+					ParentBinding:
+					{
+						IsXBind: false, // NOTE: we UpdateSource in OnTextChanged only when the binding is not an x:Bind. WinUI's generated code for x:Bind contains a simple LostFocus subscription and waits for the next LostFocus even when not focused, unlike regular Bindings.
+						UpdateSourceTrigger: UpdateSourceTrigger.Default or UpdateSourceTrigger.LostFocus
+					}
+				} bindingExpression)
 			{
 				bindingExpression.UpdateSource(Text);
 			}
@@ -427,6 +440,21 @@ namespace Microsoft.UI.Xaml.Controls
 			BeforeTextChanging?.Invoke(this, args);
 			if (args.Cancel)
 			{
+#if __SKIA__
+				if (_isSkiaTextBox)
+				{
+					// On WinUI, when a selection is canceled, the TextBox invokes a bunch of weird
+					// SelectionChanging events followed by a bunch of matching SelectionChanged.
+					// Probing for the value of SelectionStart and SelectionLength during these SelectionChanging
+					// events will give incorrect transient values and the SelectionChanged events will end up
+					// with the selection where it started (before the text change). Also, the direction of
+					// of the selection will be reset, i.e. if the selection end was "at the start", then it won't be
+					// so anymore.
+					// In Uno, we choose a simpler sequence. We just reset the selection direction (like WinUI) and
+					// we don't invoke any selection change events (since selection was in fact not changed).
+					_pendingSelection = (SelectionStart, SelectionLength);
+				}
+#endif
 				return DependencyProperty.UnsetValue;
 			}
 
@@ -508,7 +536,8 @@ namespace Microsoft.UI.Xaml.Controls
 
 		protected override void OnForegroundColorChanged(Brush oldValue, Brush newValue)
 		{
-			Brush.SetupBrushChanged(oldValue, newValue, ref _foregroundBrushChanged, () => OnForegroundColorChangedPartial(newValue));
+			_foregroundBrushChangedSubscription?.Dispose();
+			_foregroundBrushChangedSubscription = Brush.SetupBrushChanged(newValue, ref _foregroundBrushChanged, () => OnForegroundColorChangedPartial(newValue));
 		}
 
 		partial void OnForegroundColorChangedPartial(Brush newValue);
@@ -558,7 +587,9 @@ namespace Microsoft.UI.Xaml.Controls
 		{
 			oldBrush ??= DefaultBrushes.SelectionHighlightColor;
 			newBrush ??= DefaultBrushes.SelectionHighlightColor;
-			Brush.SetupBrushChanged(oldBrush, newBrush, ref _selectionHighlightColorChanged, () => OnSelectionHighlightColorChangedPartial(newBrush));
+
+			_selectionHighlightBrushChangedSubscription?.Dispose();
+			_selectionHighlightBrushChangedSubscription = Brush.SetupBrushChanged(newBrush, ref _selectionHighlightColorChanged, () => OnSelectionHighlightColorChangedPartial(newBrush));
 		}
 
 		partial void OnSelectionHighlightColorChangedPartial(SolidColorBrush brush);
@@ -970,7 +1001,7 @@ namespace Microsoft.UI.Xaml.Controls
 
 			UpdateButtonStates();
 
-			if (oldValue == FocusState.Unfocused || newValue == FocusState.Unfocused)
+			if (newValue == FocusState.Unfocused)
 			{
 				_hasTextChangedThisFocusSession = false;
 			}
@@ -1277,6 +1308,10 @@ namespace Microsoft.UI.Xaml.Controls
 			{
 				length = textLength - start;
 			}
+
+#if __SKIA__
+			_pendingSelection = null;
+#endif
 
 			if (SelectionStart == start && SelectionLength == length)
 			{

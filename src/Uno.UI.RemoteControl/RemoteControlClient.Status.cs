@@ -13,14 +13,15 @@ namespace Uno.UI.RemoteControl;
 
 public partial class RemoteControlClient
 {
-	internal event EventHandler<RemoteControlStatus>? StatusChanged;
+	public event EventHandler<RemoteControlStatus>? StatusChanged;
 
-	internal RemoteControlStatus Status => _status.BuildStatus();
+	public RemoteControlStatus Status => _status.BuildStatus();
 
 	private class StatusSink : DevServerDiagnostics.ISink
 	{
 		private readonly RemoteControlClient _owner;
 		private ConnectionState _state = ConnectionState.Idle;
+		private ConnectionError? _error;
 
 		public StatusSink(RemoteControlClient owner)
 		{
@@ -31,7 +32,7 @@ public partial class RemoteControlClient
 		}
 
 		public RemoteControlStatus BuildStatus()
-			=> new(_state, _isVersionValid, (_keepAliveState, _roundTrip), _missingRequiredProcessors, (_invalidFrames, _invalidFrameTypes));
+			=> new(_state, _error, _isVersionValid, (_keepAliveState, _roundTrip), _missingRequiredProcessors, (_invalidFrames, _invalidFrameTypes));
 
 		private void NotifyStatusChanged()
 			=> _owner.StatusChanged?.Invoke(_owner, BuildStatus());
@@ -45,9 +46,10 @@ public partial class RemoteControlClient
 				_ => ConnectionState.Connected,
 			});
 
-		public void Report(ConnectionState state)
+		public void Report(ConnectionState state, ConnectionError? error = null)
 		{
 			_state = state;
+			_error = error;
 			NotifyStatusChanged();
 		}
 		#endregion
@@ -150,7 +152,19 @@ public partial class RemoteControlClient
 
 			static IEnumerable<MissingProcessor> GetMissingServerProcessors(ImmutableHashSet<ProcessorInfo> requiredProcessors, ProcessorsDiscoveryResponse response)
 			{
-				var loaded = response.Processors.ToDictionary(p => p.Type, StringComparer.OrdinalIgnoreCase);
+				var loaded = response
+					.Processors
+					.GroupBy(p => p.Type, StringComparer.OrdinalIgnoreCase)
+					// If a processors is being loaded multiple times, we prefer to keep the result that has no error.
+					.Select(g => g
+						.OrderBy(p => p switch
+						{
+							{ LoadError: not null } => 0,
+							{ IsLoaded: false } => 1,
+							_ => 2
+						})
+						.Last())
+					.ToDictionary(p => p.Type, StringComparer.OrdinalIgnoreCase);
 				foreach (var required in requiredProcessors)
 				{
 					if (!loaded.TryGetValue(required.TypeFullName, out var actual))

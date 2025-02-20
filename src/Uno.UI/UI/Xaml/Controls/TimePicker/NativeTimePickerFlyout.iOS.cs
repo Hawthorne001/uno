@@ -21,6 +21,8 @@ partial class NativeTimePickerFlyout
 	private FlyoutPresenter? _timePickerPresenter;
 	private bool _isInitialized;
 
+	internal TimePickerSelector? GetTimeSelector() => _timeSelector;
+
 	protected override void InitializePopupPanel()
 	{
 		_popup.PopupPanel = new PickerFlyoutPopupPanel(this)
@@ -28,7 +30,6 @@ partial class NativeTimePickerFlyout
 			Visibility = Visibility.Collapsed,
 			Background = SolidColorBrushHelper.Transparent,
 			AutoresizingMask = UIViewAutoresizing.All,
-			Frame = new CGRect(CGPoint.Empty, NativeWindowWrapper.Instance.GetWindowSize())
 		};
 	}
 
@@ -90,11 +91,6 @@ partial class NativeTimePickerFlyout
 
 		if (flyout?._timePickerPresenter != null)
 		{
-			if (args.NewValue is IDependencyObjectStoreProvider binder)
-			{
-				binder.Store.SetValue(binder.Store.TemplatedParentProperty, flyout.TemplatedParent, DependencyPropertyValuePrecedences.Local);
-			}
-
 			flyout._timePickerPresenter.Content = args.NewValue;
 		}
 	}
@@ -149,6 +145,11 @@ partial class NativeTimePickerFlyout
 
 	protected internal override void Open()
 	{
+		if (Time.Ticks == TimePicker.DEFAULT_TIME_TICKS)
+		{
+			Time = GetCurrentTime();
+		}
+
 		InitializeContent();
 
 		_timeSelector?.Initialize();

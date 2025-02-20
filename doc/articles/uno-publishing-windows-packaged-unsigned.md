@@ -18,7 +18,7 @@ To package your app:
 - Update the `Package.appxmanifest` file with the following `Identity` node to include the following `OID`:
 
   ```xml
-  <Identity Name="MyApp"
+  <Identity Name="MyApp"
             Publisher="CN=AppModelSamples, OID.2.25.311729368913984317654407730594956997722=1"
             Version="1.0.0.0" />
   ```
@@ -27,7 +27,7 @@ To package your app:
 - Build your app using the following command:
 
     ```pwsh
-    msbuild /r /p:TargetFramework=net8.0-windows10.0.19041 /p:Configuration=Release /p:Platform=x64 /p:GenerateAppxPackageOnBuild=true /p:AppxBundle=Never /p:UapAppxPackageBuildMode=Sideloading /p:AppxPackageDir="C:/temp/output/" /p:AppxPackageSigningEnabled=false
+    msbuild /r /p:TargetFramework=net9.0-windows10.0.26100 /p:Configuration=Release /p:Platform=x64 /p:GenerateAppxPackageOnBuild=true /p:AppxBundle=Never /p:UapAppxPackageBuildMode=Sideloading /p:AppxPackageDir="C:/temp/output/" /p:AppxPackageSigningEnabled=false
     ```
 
 In order to build for additional platforms, change the `Platform` parameter to `x86` or `arm64` to create additional MSIX files.
@@ -58,12 +58,12 @@ To build your solution:
 - Then run this command:
 
   ```pwsh
-  msbuild /p:TargetFramework=net8.0-windows10.0.19041 /p:Configuration=Release /p:Platform=x64 /p:PublishUnsignedPackage=true /p:AppxPackageDir="C:/temp/output/"
+  msbuild /p:TargetFramework=net9.0-windows10.0.26100 /p:Configuration=Release /p:Platform=x64 /p:PublishUnsignedPackage=true /p:AppxPackageDir="C:/temp/output/"
   ```
 
   Notice that this command does not contain the `/r`.
 
-## Install the unsigned app
+## Install the unsigned Windows app
 
 To install the app:
 

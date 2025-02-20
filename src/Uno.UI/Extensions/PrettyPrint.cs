@@ -5,6 +5,8 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 using Windows.UI;
@@ -31,6 +33,13 @@ public static class PrettyPrint
 		.ToDictionary(x => (Color)x.GetValue(null)!, x => x.Name)
 	);
 
+	public static string FormatType(object o)
+	{
+		if (o is null) return $"null";
+		if (o is FrameworkElement { Name: { Length: > 0 } xName }) return $"{o.GetType().Name}#{xName}";
+
+		return o.GetType().Name;
+	}
 	public static string FormatObject(object o)
 	{
 		if (o is null) return $"null";
@@ -38,6 +47,7 @@ public static class PrettyPrint
 
 		return o.ToString();
 	}
+	public static string FormatData(object x) => x?.GetType().Name ?? "<null>";
 	public static string FormatCornerRadius(CornerRadius x)
 	{
 		// format: uniform, [left,top,right,bottom]
@@ -61,7 +71,8 @@ public static class PrettyPrint
 		return $"[{x.Width:0.#}x{x.Height:0.#}@{x.Left:0.#},{x.Top:0.#}]";
 	}
 #endif
-	public static string FormatSize(Size size) => $"{size.Width:0.#}x{size.Height:0.#}";
+	public static string FormatSize(Size size) => FormatSize(size.Width, size.Height);
+	public static string FormatSize(double width, double height) => $"{width:0.#}x{height:0.#}";
 	public static string FormatBrush(Brush b)
 	{
 		if (b is SolidColorBrush scb) return
@@ -69,9 +80,43 @@ public static class PrettyPrint
 			(_knownColors.Value.TryGetValue(scb.Color, out var name) ? name : $"#{scb.Color.A:X2}{scb.Color.R:X2}{scb.Color.G:X2}{scb.Color.B:X2}") +
 			(scb.Opacity != 1 ? $"*{scb.Opacity:#.###}" : "");
 
-		return b.GetType().Name;
+		return b?.GetType().Name;
 	}
+	public static string FormatGridDefinition(ColumnDefinition def) => FormatGridDefinition(def.MinWidth, def.Width, def.MaxWidth);
+	public static string FormatGridDefinition(RowDefinition def) => FormatGridDefinition(def.MinHeight, def.Height, def.MaxHeight);
+	private static string FormatGridDefinition(double min, GridLength value, double max)
+	{
+		return min != 0d || max != double.PositiveInfinity
+			? $"[{min:#.##}~{FormatGridLength(value)}~{max:#.##}]" // [min~value~max]
+			: FormatGridLength(value); // value
+	}
+	public static string FormatGridLength(GridLength x) => FormatGridLength(x.Value, x.GridUnitType);
+	public static string FormatGridLength(double value, GridUnitType type) => type switch
+	{
+		GridUnitType.Auto => "A",
+		GridUnitType.Pixel => $"{value:#.##}",
+		GridUnitType.Star => value switch
+		{
+			0d => "0*",
+			1d => "*",
 
+			_ => $"{value:#.##}*"
+		},
+		_ => /* CS8524: (GridUnitType)123 */ $"{value:#.##}{type}"
+	};
+	public static string FormatPoint(Point p) => FormatPoint(p.X, p.Y);
+	public static string FormatPoint(double x, double y) => $"{x:0.#},{y:0.#}";
+	public static string FormatBinding(BindingExpression be)
+	{
+		if (be == null) return "null";
+
+		var descriptions = new List<string>();
+		descriptions.Add($"Path={be.ParentBinding.Path?.Path}");
+		if (be.ParentBinding.Mode != BindingMode.OneWay) descriptions.Add(be.ParentBinding.Mode.ToString());
+		if (be.ParentBinding.RelativeSource is { Mode: not RelativeSourceMode.None } rs) descriptions.Add(rs.Mode.ToString());
+
+		return $"[{string.Join(", ", descriptions)}]";
+	}
 	public static string EscapeMultiline(string s, bool escapeTabs = false)
 	{
 		s = s

@@ -34,6 +34,7 @@ using Uno.UI.Extensions;
 using Private.Infrastructure;
 using System.Reflection.Metadata;
 using UITests.Shared.Helpers;
+using System.Runtime.CompilerServices;
 
 namespace SampleControl.Presentation
 {
@@ -437,6 +438,11 @@ namespace SampleControl.Presentation
 			SetSelectedSample(CancellationToken.None, "Playground", "Playground");
 		}
 
+		internal async Task OpenSample(CancellationToken ct, SampleChooserContent content)
+		{
+			await SetSelectedSample(ct, content.ControlType.FullName);
+		}
+
 		internal async Task OpenRuntimeTests(CancellationToken ct)
 		{
 			IsSplitVisible = false;
@@ -625,17 +631,20 @@ namespace SampleControl.Presentation
 
 				// Order the results by showing the "start with" results
 				// followed by results that "contain" the search term
-				return starts.Concat(contains).Distinct().ToList();
+				return starts.Concat(contains).OrderBy(s => s.ControlName).Distinct().ToList();
 			});
 		}
 
-		public void TryOpenSample()
+		public bool TryOpenSingleSearchResult()
 		{
 			if (FilteredSamples is { } samples
 				&& samples.Count is 1)
 			{
 				SelectedSearchSample = samples[0];
+				return true;
 			}
+
+			return false;
 		}
 
 		/// <summary>
@@ -800,7 +809,8 @@ namespace SampleControl.Presentation
 				SampleContents = SelectedCategory
 					.SamplesContent
 					.Safe()
-					.OrderBy(s => s.IsFavorite)
+					.OrderByDescending(s => s.IsFavorite)
+					.ThenBy(s => s.ControlName)
 					.ToList();
 			}
 		}
@@ -826,6 +836,11 @@ namespace SampleControl.Presentation
 
 		private async Task ToggleFavorite(CancellationToken ct, SampleChooserContent sample)
 		{
+			if (sample is null)
+			{
+				return;
+			}
+
 			var favorites = await GetFavoriteSamples(ct);
 
 			if (favorites.Contains(sample))
@@ -842,6 +857,7 @@ namespace SampleControl.Presentation
 
 			FavoriteSamples = favorites;
 
+			OnSelectedCategoryChanged();
 			UpdateFavorites();
 		}
 
