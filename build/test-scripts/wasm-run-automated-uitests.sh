@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 set -x #echo on
 set -euo pipefail
 IFS=$'\n\t'
@@ -19,10 +19,6 @@ dotnet tool uninstall dotnet-serve --tool-path $BUILD_SOURCESDIRECTORY/build/too
 dotnet tool install dotnet-serve --version 1.10.140 --tool-path $BUILD_SOURCESDIRECTORY/build/tools || true
 export PATH="$PATH:$BUILD_SOURCESDIRECTORY/build/tools"
 
-# Workaround an issue where dotnet test gets stuck.
-# If this is removed and everything works, then remove it! :)
-export MSBUILDENSURESTDOUTFORTASKPROCESSES=1
-
 export UNO_UITEST_TARGETURI=http://localhost:8000
 export UNO_UITEST_DRIVERPATH_CHROME=$BUILD_SOURCESDIRECTORY/build/wasm-uitest-binaries/node_modules/chromedriver/lib/chromedriver
 export UNO_UITEST_CHROME_BINARY_PATH=~/.cache/puppeteer/chrome/linux-127.0.6533.72/chrome-linux64/chrome
@@ -39,10 +35,10 @@ export UNO_TESTS_RESPONSE_FILE=$BUILD_SOURCESDIRECTORY/build/nunit.response
 if [ "$UITEST_AUTOMATED_GROUP" == 'Default' ];
 then
 	export TEST_FILTERS=" \
-		Namespace != SamplesApp.UITests.Snap \
+		FullyQualifiedName !~ SamplesApp.UITests.Snap \
 		& FullyQualifiedName !~ SamplesApp.UITests.Runtime.RuntimeTests \
 		& FullyQualifiedName !~ SamplesApp.UITests.Runtime.BenchmarkDotNetTests \
-	"
+"
 
 elif [ "$UITEST_AUTOMATED_GROUP" == 'RuntimeTests' ];
 then
@@ -114,11 +110,11 @@ mkdir -p $(dirname ${UNO_TESTS_FAILED_LIST})
 
 echo "Running NUnitTransformTool"
 
-dotnet run list-failed $UNO_ORIGINAL_TEST_RESULTS $UNO_TESTS_FAILED_LIST
-
 ## Fail the build when no test results could be read
 dotnet run fail-empty $UNO_ORIGINAL_TEST_RESULTS
 
-echo "Ran NUnitTransformTool"
+if [ $? -eq 0 ]; then
+	dotnet run list-failed $UNO_ORIGINAL_TEST_RESULTS $UNO_TESTS_FAILED_LIST
+fi
 
 popd

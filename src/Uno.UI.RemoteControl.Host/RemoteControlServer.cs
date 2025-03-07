@@ -9,6 +9,7 @@ using System.Runtime.Loader;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Uno.Extensions;
@@ -17,6 +18,7 @@ using Uno.UI.RemoteControl.Host.IdeChannel;
 using Uno.UI.RemoteControl.HotReload.Messages;
 using Uno.UI.RemoteControl.Messages;
 using Uno.UI.RemoteControl.Messaging.IdeChannel;
+using Uno.UI.RemoteControl.Services;
 
 namespace Uno.UI.RemoteControl.Host;
 
@@ -26,25 +28,27 @@ internal class RemoteControlServer : IRemoteControlServer, IDisposable
 	private static readonly Dictionary<string, (AssemblyLoadContext Context, int Count)> _loadContexts = new();
 	private static readonly Dictionary<string, string> _resolveAssemblyLocations = new();
 	private readonly Dictionary<string, IServerProcessor> _processors = new();
+	private readonly List<DiscoveredProcessor> _discoveredProcessors = new();
 	private readonly CancellationTokenSource _ct = new();
 
 	private WebSocket? _socket;
-	private IdeChannelServer? _ideChannelServer;
 	private readonly List<string> _appInstanceIds = new();
 	private readonly IConfiguration _configuration;
-	private readonly IIdeChannelServerProvider _ideChannelProvider;
+	private readonly IIdeChannel _ideChannel;
 	private readonly IServiceProvider _serviceProvider;
 
-	public RemoteControlServer(IConfiguration configuration, IIdeChannelServerProvider ideChannelProvider, IServiceProvider serviceProvider)
+	public RemoteControlServer(IConfiguration configuration, IIdeChannel ideChannel, IServiceProvider serviceProvider)
 	{
 		_configuration = configuration;
-		_ideChannelProvider = ideChannelProvider;
+		_ideChannel = ideChannel;
 		_serviceProvider = serviceProvider;
 
 		if (this.Log().IsEnabled(LogLevel.Debug))
 		{
 			this.Log().LogDebug("Starting RemoteControlServer");
 		}
+
+		_ideChannel.MessageFromIde += ProcessIdeMessage;
 	}
 
 	string IRemoteControlServer.GetServerConfiguration(string key)
@@ -90,8 +94,7 @@ internal class RemoteControlServer : IRemoteControlServer, IDisposable
 									this.Log().LogTrace("Loading assembly from resolved path: {relPath}", relPath);
 								}
 
-								using var fs = File.Open(relPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-								return context.LoadFromStream(fs);
+								return TryLoadAssemblyFromPath(context, relPath);
 							}
 						}
 					}
@@ -128,76 +131,103 @@ internal class RemoteControlServer : IRemoteControlServer, IDisposable
 		}
 	}
 
+	private static Assembly TryLoadAssemblyFromPath(AssemblyLoadContext context, string asmPath)
+	{
+		// Load the assembly using the full path to avoid duplicates related
+		// relative paths pointing to the same file.
+		asmPath = Path.GetFullPath(asmPath);
+
+		// Try loading the assembly multiple times, using a try catch and a loop with a sleep
+		// to avoid issues with the assembly being locked by another process.
+		int tries = 10;
+		do
+		{
+			try
+			{
+				return context.LoadFromAssemblyPath(asmPath);
+			}
+			catch (Exception exc)
+			{
+				if (context.Log().IsEnabled(LogLevel.Trace))
+				{
+					context.Log().LogTrace("Failed to load assembly {asmPath} : {exc}", asmPath, exc);
+				}
+			}
+
+			Thread.Sleep(100);
+		}
+		while (tries-- > 0);
+
+		// Try without exception handling to report the original exception
+		return context.LoadFromAssemblyPath(asmPath);
+	}
+
 	private void RegisterProcessor(IServerProcessor hotReloadProcessor)
 		=> _processors[hotReloadProcessor.Scope] = hotReloadProcessor;
-
-	public IdeChannelServer? IDEChannelServer => _ideChannelServer;
 
 	public async Task RunAsync(WebSocket socket, CancellationToken ct)
 	{
 		_socket = socket;
 
-		await TryStartIDEChannelAsync();
+		if (_ideChannel is IdeChannelServer srv)
+		{
+			await srv.WaitForReady(ct);
+		}
 
 		while (await WebSocketHelper.ReadFrame(socket, ct) is Frame frame)
 		{
-			if (frame.Scope == "RemoteControlServer")
+			try
 			{
-				if (frame.Name == ProcessorsDiscovery.Name)
+				if (frame.Scope == "RemoteControlServer")
 				{
-					await ProcessDiscoveryFrame(frame);
-					continue;
-				}
-
-				if (frame.Name == KeepAliveMessage.Name)
-				{
-					await ProcessPingFrame(frame);
-					continue;
-				}
-			}
-
-			if (_processors.TryGetValue(frame.Scope, out var processor))
-			{
-				if (this.Log().IsEnabled(LogLevel.Debug))
-				{
-					this.Log().LogDebug("Received Frame [{Scope} / {Name}] to be processed by {processor}", frame.Scope, frame.Name, processor);
-				}
-
-				try
-				{
-					DevServerDiagnostics.Current = DiagnosticsSink.Instance;
-					await processor.ProcessFrame(frame);
-				}
-				catch (Exception e)
-				{
-					if (this.Log().IsEnabled(LogLevel.Error))
+					if (frame.Name == ProcessorsDiscovery.Name)
 					{
-						this.Log().LogError(e, "Failed to process frame [{Scope} / {Name}]", frame.Scope, frame.Name);
+						await ProcessDiscoveryFrame(frame);
+						continue;
+					}
+
+					if (frame.Name == KeepAliveMessage.Name)
+					{
+						await ProcessPingFrame(frame);
+						continue;
+					}
+				}
+
+				if (_processors.TryGetValue(frame.Scope, out var processor))
+				{
+					if (this.Log().IsEnabled(LogLevel.Debug))
+					{
+						this.Log().LogDebug("Received Frame [{Scope} / {Name}] to be processed by {processor}", frame.Scope, frame.Name, processor);
+					}
+
+					try
+					{
+						DevServerDiagnostics.Current = DiagnosticsSink.Instance;
+						await processor.ProcessFrame(frame);
+					}
+					catch (Exception e)
+					{
+						if (this.Log().IsEnabled(LogLevel.Error))
+						{
+							this.Log().LogError(e, "Failed to process frame [{Scope} / {Name}]", frame.Scope, frame.Name);
+						}
+					}
+				}
+				else
+				{
+					if (this.Log().IsEnabled(LogLevel.Debug))
+					{
+						this.Log().LogDebug("Unknown Frame [{Scope} / {Name}]", frame.Scope, frame.Name);
 					}
 				}
 			}
-			else
+			catch (Exception error)
 			{
-				if (this.Log().IsEnabled(LogLevel.Debug))
+				if (this.Log().IsEnabled(LogLevel.Error))
 				{
-					this.Log().LogDebug("Unknown Frame [{Scope} / {Name}]", frame.Scope, frame.Name);
+					this.Log().LogError(error, "Failed to process frame [{Scope} / {Name}]", frame.Scope, frame.Name);
 				}
 			}
-		}
-	}
-
-	private async Task TryStartIDEChannelAsync()
-	{
-		if (_ideChannelServer is { } oldChannel)
-		{
-			oldChannel.MessageFromIDE -= ProcessIdeMessage;
-		}
-
-		_ideChannelServer = await _ideChannelProvider.GetIdeChannelServerAsync();
-
-		if (_ideChannelServer is { } newChannel)
-		{
-			newChannel.MessageFromIDE += ProcessIdeMessage;
 		}
 	}
 
@@ -268,7 +298,6 @@ internal class RemoteControlServer : IRemoteControlServer, IDisposable
 	private async Task ProcessDiscoveryFrame(Frame frame)
 	{
 		var assemblies = new List<(string path, System.Reflection.Assembly assembly)>();
-		var discoveredProcessors = new List<DiscoveredProcessor>();
 		try
 		{
 			var msg = JsonConvert.DeserializeObject<ProcessorsDiscovery>(frame.Content)!;
@@ -288,8 +317,7 @@ internal class RemoteControlServer : IRemoteControlServer, IDisposable
 				{
 					_resolveAssemblyLocations[msg.AppInstanceId] = msg.BasePath;
 
-					using var fs = File.Open(msg.BasePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-					assemblies.Add((msg.BasePath, assemblyLoadContext.LoadFromStream(fs)));
+					assemblies.Add((msg.BasePath, TryLoadAssemblyFromPath(assemblyLoadContext, msg.BasePath)));
 				}
 				catch (Exception exc)
 				{
@@ -367,14 +395,14 @@ internal class RemoteControlServer : IRemoteControlServer, IDisposable
 
 							try
 							{
-								if (asm.assembly.CreateInstance(processor.ProcessorType.FullName!, ignoreCase: false, bindingAttr: BindingFlags.Instance | BindingFlags.Public, binder: null, args: new[] { this }, culture: null, activationAttributes: null) is IServerProcessor serverProcessor)
+								if (ActivatorUtilities.CreateInstance(_serviceProvider, processor.ProcessorType, parameters: new[] { this }) is IServerProcessor serverProcessor)
 								{
-									discoveredProcessors.Add(new(asm.path, processor.ProcessorType.FullName!, VersionHelper.GetVersion(processor.ProcessorType), IsLoaded: true));
+									_discoveredProcessors.Add(new(asm.path, processor.ProcessorType.FullName!, VersionHelper.GetVersion(processor.ProcessorType), IsLoaded: true));
 									RegisterProcessor(serverProcessor);
 								}
 								else
 								{
-									discoveredProcessors.Add(new(asm.path, processor.ProcessorType.FullName!, VersionHelper.GetVersion(processor.ProcessorType), IsLoaded: false));
+									_discoveredProcessors.Add(new(asm.path, processor.ProcessorType.FullName!, VersionHelper.GetVersion(processor.ProcessorType), IsLoaded: false));
 									if (this.Log().IsEnabled(LogLevel.Debug))
 									{
 										this.Log().LogDebug("Failed to create server processor {ProcessorType}", processor.ProcessorType);
@@ -383,7 +411,7 @@ internal class RemoteControlServer : IRemoteControlServer, IDisposable
 							}
 							catch (Exception error)
 							{
-								discoveredProcessors.Add(new(asm.path, processor.ProcessorType.FullName!, VersionHelper.GetVersion(processor.ProcessorType), IsLoaded: false, LoadError: error.ToString()));
+								_discoveredProcessors.Add(new(asm.path, processor.ProcessorType.FullName!, VersionHelper.GetVersion(processor.ProcessorType), IsLoaded: false, LoadError: error.ToString()));
 								if (this.Log().IsEnabled(LogLevel.Error))
 								{
 									this.Log().LogError(error, "Failed to create server processor {ProcessorType}", processor.ProcessorType);
@@ -415,7 +443,7 @@ internal class RemoteControlServer : IRemoteControlServer, IDisposable
 		{
 			await SendFrame(new ProcessorsDiscoveryResponse(
 				assemblies.Select(asm => asm.path).ToImmutableList(),
-				discoveredProcessors.ToImmutableList()));
+				_discoveredProcessors.ToImmutableList()));
 		}
 	}
 
@@ -442,13 +470,8 @@ internal class RemoteControlServer : IRemoteControlServer, IDisposable
 		}
 	}
 
-	public async Task SendMessageToIDEAsync(IdeMessage message)
-	{
-		if (IDEChannelServer is not null)
-		{
-			await IDEChannelServer.SendToIdeAsync(message);
-		}
-	}
+	public Task SendMessageToIDEAsync(IdeMessage message)
+		=> _ideChannel.SendToIdeAsync(message, default);
 
 	public void Dispose()
 	{

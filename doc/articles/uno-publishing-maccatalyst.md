@@ -24,7 +24,7 @@ Then, you'll need to setup your `csproj` to include the signing information:
 
 ```xml
 <Choose>
-  <When Condition="'$(TargetFramework)'=='net8.0-maccatalyst'">
+  <When Condition="'$(TargetFramework)'=='net9.0-maccatalyst'">
     <PropertyGroup Condition="'$(Configuration)'=='Release'">
       <CodeSigningKey>Apple Distribution: [YourCompany]. (Your ID)</CodeSigningKey>
       <PackageSigningKey>3rd Party Mac Developer Installer</PackageSigningKey>
@@ -43,7 +43,7 @@ To build your app from the CLI on macOS:
 - Publish the app using:
 
   ```shell
-  dotnet publish -f net8.0-maccatalyst -c Release -p:CreatePackage=true -o ./publish
+  dotnet publish -f net9.0-maccatalyst -c Release -p:CreatePackage=true -o ./publish
   ```
 
 The output `.pkg` file will be in the `publish` folder.
@@ -51,6 +51,6 @@ The output `.pkg` file will be in the `publish` folder.
 > [!TIP]
 > To create a `.app` folder, set the `CreatePackage` parameter to `false`.
 
-## Publishing your app
+## Publishing your app om the App Store
 
 Publishing your app is done through [the transporter app](https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds) on macOS.

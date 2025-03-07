@@ -101,11 +101,11 @@ namespace Uno.UI.RuntimeTests.Tests.Microsoft_UI_Xaml_Controls
 
 			mouse.MoveBy(0, 1);
 			await WindowHelper.WaitForIdle();
-			Assert.AreEqual(dragStartingCount, 0);
+			Assert.AreEqual(0, dragStartingCount);
 
 			mouse.MoveBy(0, 15); // move out of the tvi
 			await WindowHelper.WaitForIdle();
-			Assert.AreEqual(dragStartingCount, 1);
+			Assert.AreEqual(1, dragStartingCount);
 		}
 #endif
 
@@ -703,8 +703,8 @@ namespace Uno.UI.RuntimeTests.Tests.Microsoft_UI_Xaml_Controls
 			// assert: before expanding
 			Assert.AreEqual(targetItem, tvm.SelectedItem, "[collapsed]invalid tvm.SelectedItem");
 			Assert.AreEqual(targetItem, SUT.SelectedItem, "[collapsed]invalid SUT.SelectedItem");
-			Assert.AreEqual(null, SUT.SelectedNode, "[collapsed]invalid SUT.SelectedNode should be null");
-			Assert.AreEqual(null, SUT.NodeFromContainer(SUT.ContainerFromItem(targetItem)), "[collapsed]selected node should not exist yet");
+			Assert.IsNull(SUT.SelectedNode, "[collapsed]invalid SUT.SelectedNode should be null");
+			Assert.IsNull(SUT.NodeFromContainer(SUT.ContainerFromItem(targetItem)), "[collapsed]selected node should not exist yet");
 
 			// expand the ancestry from top-down
 			for (int i = 1; i < targetItem.Label.Length; i++)
@@ -768,10 +768,10 @@ namespace Uno.UI.RuntimeTests.Tests.Microsoft_UI_Xaml_Controls
 			await UITestHelper.Load(setup);
 
 			// assert: before expanding
-			Assert.AreEqual(null, tvm.SelectedItem, "[collapsed]invalid tvm.SelectedItem");
-			Assert.AreEqual(null, SUT.SelectedItem, "[collapsed]invalid SUT.SelectedItem");
-			Assert.AreEqual(null, SUT.SelectedNode, "[collapsed]invalid SUT.SelectedNode should be null");
-			Assert.AreEqual(null, SUT.NodeFromContainer(SUT.ContainerFromItem(targetItem)), "[collapsed]selected node should not exist yet");
+			Assert.IsNull(tvm.SelectedItem, "[collapsed]invalid tvm.SelectedItem");
+			Assert.IsNull(SUT.SelectedItem, "[collapsed]invalid SUT.SelectedItem");
+			Assert.IsNull(SUT.SelectedNode, "[collapsed]invalid SUT.SelectedNode should be null");
+			Assert.IsNull(SUT.NodeFromContainer(SUT.ContainerFromItem(targetItem)), "[collapsed]selected node should not exist yet");
 
 			// expand the ancestry from top-down
 			for (int i = 1; i < targetItem.Label.Length; i++)
@@ -934,6 +934,16 @@ namespace Uno.UI.RuntimeTests.Tests.Microsoft_UI_Xaml_Controls
 #if HAS_UNO
 			Assert.AreEqual(TreeNodeSelectionState.Selected, SUT.NodeFromContainer(SUT.ContainerFromItem(targetItem))?.SelectionState, "[step2]target node is not selected");
 #endif
+		}
+
+		[TestMethod]
+		public async Task When_Simple_ItemsSource()
+		{
+			var SUT = new TreeView()
+			{
+				ItemsSource = new int[] { 1, 2 }
+			};
+			await UITestHelper.Load(SUT);
 		}
 	}
 	public partial class Given_TreeView // helper methods, view-models

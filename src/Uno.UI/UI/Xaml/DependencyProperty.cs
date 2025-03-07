@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -38,7 +39,6 @@ namespace Microsoft.UI.Xaml
 	{
 		private readonly static DependencyPropertyRegistry _registry = DependencyPropertyRegistry.Instance;
 
-		private readonly static TypeToPropertiesDictionary _getPropertiesForType = new TypeToPropertiesDictionary();
 		private readonly static NameToPropertyDictionary _getPropertyCache = new NameToPropertyDictionary();
 		private static object DefaultThemeAnimationDurationBox = new Duration(FeatureConfiguration.ThemeAnimation.DefaultThemeAnimationDuration);
 
@@ -48,7 +48,7 @@ namespace Microsoft.UI.Xaml
 		private readonly static PropertyCacheEntry _searchPropertyCacheEntry = new();
 
 
-		private readonly static FrameworkPropertiesForTypeDictionary _getFrameworkPropertiesForType = new FrameworkPropertiesForTypeDictionary();
+		private readonly static FrameworkPropertiesForTypeDictionary _getInheritedPropertiesForType = new FrameworkPropertiesForTypeDictionary();
 
 		private readonly PropertyMetadata _ownerTypeMetadata; // For perf consideration, we keep direct ref the metadata for the owner type
 
@@ -138,7 +138,11 @@ namespace Microsoft.UI.Xaml
 		/// <param name="typeMetadata">The metadata to use when creating the property</param>
 		/// <returns>A dependency property instance</returns>
 		/// <exception cref="InvalidOperationException">A property with the same name has already been declared for the ownerType</exception>
-		public static DependencyProperty Register(string name, Type propertyType, Type ownerType, PropertyMetadata typeMetadata)
+		public static DependencyProperty Register(
+			string name,
+			[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)] Type propertyType,
+			[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)] Type ownerType,
+			PropertyMetadata typeMetadata)
 		{
 			typeMetadata = FixMetadataIfNeeded(propertyType, typeMetadata);
 
@@ -159,7 +163,10 @@ namespace Microsoft.UI.Xaml
 			return newProperty;
 		}
 
-		private static PropertyMetadata FixMetadataIfNeeded(Type propertyType, PropertyMetadata metadata)
+		private static PropertyMetadata FixMetadataIfNeeded(
+			[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
+			Type propertyType,
+			PropertyMetadata metadata)
 		{
 			if (metadata is null)
 			{
@@ -187,7 +194,11 @@ namespace Microsoft.UI.Xaml
 		/// This method is to ensure that all uno controls defined dependency properties are using <see cref="FrameworkPropertyMetadata"/>.
 		/// This is achieved by banning the other public overload in Uno.UI directory.
 		/// </remarks>
-		internal static DependencyProperty Register(string name, Type propertyType, Type ownerType, FrameworkPropertyMetadata typeMetadata)
+		internal static DependencyProperty Register(
+			string name,
+			[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)] Type propertyType,
+			[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)] Type ownerType,
+			FrameworkPropertyMetadata typeMetadata)
 #pragma warning disable RS0030 // Do not used banned APIs
 			=> Register(name, propertyType, ownerType, (PropertyMetadata)typeMetadata);
 #pragma warning restore RS0030 // Do not used banned APIs
@@ -201,7 +212,11 @@ namespace Microsoft.UI.Xaml
 		/// <param name="defaultMetadata">The metadata to use when creating the property</param>
 		/// <returns>A dependency property instance</returns>
 		/// <exception cref="InvalidOperationException">A property with the same name has already been declared for the ownerType</exception>
-		public static DependencyProperty RegisterAttached(string name, Type propertyType, Type ownerType, PropertyMetadata defaultMetadata)
+		public static DependencyProperty RegisterAttached(
+			string name,
+			[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)] Type propertyType,
+			[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)] Type ownerType,
+			PropertyMetadata defaultMetadata)
 		{
 			defaultMetadata = FixMetadataIfNeeded(propertyType, defaultMetadata);
 
@@ -235,6 +250,7 @@ namespace Microsoft.UI.Xaml
 		/// This method is to ensure that all uno controls defined dependency properties are using <see cref="FrameworkPropertyMetadata"/>.
 		/// This is achieved by banning the other public overload in Uno.UI directory.
 		/// </remarks>
+		[UnconditionalSuppressMessage("Trimming", "IL2067", Justification = "Types manipulated here have been marked earlier")]
 		internal static DependencyProperty RegisterAttached(string name, Type propertyType, Type ownerType, FrameworkPropertyMetadata typeMetadata)
 #pragma warning disable RS0030 // Do not used banned APIs
 			=> RegisterAttached(name, propertyType, ownerType, (PropertyMetadata)typeMetadata);
@@ -381,36 +397,18 @@ namespace Microsoft.UI.Xaml
 		}
 
 		/// <summary>
-		/// Gets the dependencies properties for the specified type
-		/// </summary>
-		/// <param name="type">A dependency object</param>
-		/// <returns>An array of Dependency Properties.</returns>
-		internal static DependencyProperty[] GetPropertiesForType(Type type)
-		{
-			DependencyProperty[] result = null;
-
-			if (!_getPropertiesForType.TryGetValue(type, out result))
-			{
-				_getPropertiesForType.Add(type, result = InternalGetPropertiesForType(type));
-			}
-
-			return result;
-		}
-
-		/// <summary>
 		/// Gets the dependencies properties for the specified type with specific Framework metadata options
 		/// </summary>
 		/// <param name="type">A dependency object</param>
 		/// <param name="options">A set of flags that must be set</param>
 		/// <returns>An array of Dependency Properties.</returns>
-		internal static DependencyProperty[] GetFrameworkPropertiesForType(Type type, FrameworkPropertyMetadataOptions options)
+		internal static DependencyProperty[] GetInheritedPropertiesForType(Type type)
 		{
 			DependencyProperty[] result = null;
-			var key = CachedTuple.Create(type, options);
 
-			if (!_getFrameworkPropertiesForType.TryGetValue(key, out result))
+			if (!_getInheritedPropertiesForType.TryGetValue(type, out result))
 			{
-				_getFrameworkPropertiesForType.Add(key, result = InternalGetFrameworkPropertiesForType(type, options));
+				_getInheritedPropertiesForType.Add(type, result = InternalGetInheritedPropertiesForType(type));
 			}
 
 			return result;
@@ -421,29 +419,6 @@ namespace Microsoft.UI.Xaml
 			ResetGetPropertyCache(ownerType, name);
 
 			_registry.Add(ownerType, name, newProperty);
-		}
-
-		private static DependencyProperty[] InternalGetPropertiesForType(Type type)
-		{
-			ForceInitializeTypeConstructor(type);
-
-			var results = new List<DependencyProperty>();
-
-			do
-			{
-				_registry.AppendPropertiesForType(type, results);
-
-				// Dependency properties are inherited
-				type = type.BaseType;
-			}
-			while (type != typeof(object) && type != null);
-
-			var array = results.ToArray();
-
-			// Produce a pre-sorted list, aligned with the initial behavior of DependencyPropertyDetailsCollection
-			Array.Sort(array, (l, r) => l.UniqueId - r.UniqueId);
-
-			return array;
 		}
 
 		/// <summary>
@@ -458,6 +433,7 @@ namespace Microsoft.UI.Xaml
 		///
 		/// See: http://stackoverflow.com/questions/6729841/why-did-the-beforefieldinit-behavior-change-in-net-4
 		/// </remarks>
+		[UnconditionalSuppressMessage("Trimming", "IL2059", Justification = "Normal flow of operations")]
 		internal static void ForceInitializeTypeConstructor(Type type)
 		{
 			do
@@ -469,21 +445,27 @@ namespace Microsoft.UI.Xaml
 			while (type != null);
 		}
 
-		private static DependencyProperty[] InternalGetFrameworkPropertiesForType(Type type, FrameworkPropertyMetadataOptions options)
+		private static DependencyProperty[] InternalGetInheritedPropertiesForType(Type type)
 		{
-			var output = new List<DependencyProperty>();
+			ForceInitializeTypeConstructor(type);
 
-			foreach (var prop in GetPropertiesForType(type))
+			var results = new List<DependencyProperty>();
+
+			do
 			{
-				var propertyOptions = (prop.Metadata as FrameworkPropertyMetadata)?.Options;
+				_registry.AppendInheritedPropertiesForType(type, results);
 
-				if (propertyOptions != null && (propertyOptions & options) != 0)
-				{
-					output.Add(prop);
-				}
+				// Dependency properties are inherited
+				type = type.BaseType;
 			}
+			while (type != typeof(object) && type != null);
 
-			return output.ToArray();
+			var array = results.ToArray();
+
+			// Produce a pre-sorted list, aligned with the initial behavior of DependencyPropertyDetailsCollection
+			Array.Sort(array, (l, r) => l.UniqueId - r.UniqueId);
+
+			return array;
 		}
 
 		private bool TryGetDefaultInheritedPropertyValue(out object defaultValue)

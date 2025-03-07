@@ -203,7 +203,7 @@ namespace Microsoft.UI.Xaml.Controls
 
 		private void RestoreScroll()
 		{
-			if (TemplatedParent is ScrollViewer sv)
+			if (GetTemplatedParent() is ScrollViewer sv)
 			{
 				if (sv.HorizontalOffset > 0 || sv.VerticalOffset > 0)
 				{
@@ -308,7 +308,7 @@ namespace Microsoft.UI.Xaml.Controls
 						// If those values are invalid, the browser will raise the final event anyway.
 						// Note: If the caller has allowed animation, we assume that it's not interested by a sync response,
 						//		 we prefer to wait for the browser to effectively scroll.
-						(TemplatedParent as ScrollViewer)?.OnPresenterScrolled(
+						(GetTemplatedParent() as ScrollViewer)?.OnPresenterScrolled(
 							horizontalOffset ?? nativeHorizontalOffset,
 							verticalOffset ?? nativeVerticalOffset,
 							isIntermediate: false
@@ -354,8 +354,8 @@ namespace Microsoft.UI.Xaml.Controls
 			var horizontalOffset = GetNativeHorizontalOffset();
 			var verticalOffset = GetNativeVerticalOffset();
 			var isIntermediate =
-				(_lastScrollToRequest.horizontal.HasValue && _lastScrollToRequest.horizontal.Value != horizontalOffset) ||
-				(_lastScrollToRequest.vertical.HasValue && _lastScrollToRequest.vertical.Value != verticalOffset);
+				(_lastScrollToRequest.horizontal.HasValue && Math.Abs(_lastScrollToRequest.horizontal.Value - horizontalOffset) >= 1) ||
+				(_lastScrollToRequest.vertical.HasValue && Math.Abs(_lastScrollToRequest.vertical.Value - verticalOffset) >= 1);
 			if (!isIntermediate)
 			{
 				_lastScrollToRequest = (null, null);

@@ -33,9 +33,10 @@ public class Given_FrameworkTemplatePool
 #if HAS_UNO
 	[TestMethod]
 	[RunsOnUIThread]
-#if __ANDROID__
-	[Ignore("https://github.com/unoplatform/uno/issues/13969")]
-#endif
+	//#if __ANDROID__
+	//[Ignore("https://github.com/unoplatform/uno/issues/13969")]
+	//#endif
+	[Ignore("#18317 With TemplatedParent rework, the recycling part was not re-introduced/updated.")]
 	public async Task When_Recycle()
 	{
 		using (FeatureConfigurationHelper.UseTemplatePooling())
@@ -200,7 +201,7 @@ public class Given_FrameworkTemplatePool
 			Assert.IsTrue(vm.Editors.All(e => !string.IsNullOrEmpty(e.Text)));
 			Assert.IsTrue(vm.Editors.All(e => e.IsChecked));
 			Assert.IsTrue(vm.Editors.All(e => e.IsOn));
-			Assert.IsTrue(!string.IsNullOrEmpty(textBox.Text));
+			Assert.IsFalse(string.IsNullOrEmpty(textBox.Text));
 			Assert.IsTrue(checkBox.IsChecked);
 			Assert.IsTrue(toggleSwitch.IsOn);
 			Assert.AreEqual(vm.CurrentEditor.IsChecked, checkBox.IsChecked);

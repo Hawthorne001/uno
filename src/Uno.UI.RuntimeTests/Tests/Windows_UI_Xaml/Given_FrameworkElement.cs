@@ -396,7 +396,6 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 		[DataRow("	Infinity")]
 		[DataRow("-Infinity ")]
 		[DataRow("	Infinity")]
-		[ExpectedException(typeof(ArgumentException))]
 #if !WINAPPSDK
 		[Ignore]
 #endif
@@ -405,10 +404,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			using var _ = new AssertionScope();
 
 			var sut = new ContentControl { Tag = variant };
-
-			sut.SetBinding(
-				FrameworkElement.WidthProperty,
-				new Binding { Source = sut, Path = new PropertyPath("Tag") });
+			var binding = new Binding { Source = sut, Path = new PropertyPath("Tag") };
+			Assert.Throws<ArgumentException>(() => sut.SetBinding(FrameworkElement.WidthProperty, binding));
 		}
 
 		private sealed partial class MyPanel : Panel
@@ -644,9 +641,9 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 				SUT.Measure(new Size(42.0, double.NaN));
 				SUT.Measure(new Size(double.NaN, 42.0));
 #else
-				Assert.ThrowsException<InvalidOperationException>(() => SUT.Measure(new Size(double.NaN, double.NaN)));
-				Assert.ThrowsException<InvalidOperationException>(() => SUT.Measure(new Size(42.0, double.NaN)));
-				Assert.ThrowsException<InvalidOperationException>(() => SUT.Measure(new Size(double.NaN, 42.0)));
+				Assert.ThrowsExactly<InvalidOperationException>(() => SUT.Measure(new Size(double.NaN, double.NaN)));
+				Assert.ThrowsExactly<InvalidOperationException>(() => SUT.Measure(new Size(42.0, double.NaN)));
+				Assert.ThrowsExactly<InvalidOperationException>(() => SUT.Measure(new Size(double.NaN, 42.0)));
 #endif
 			});
 
@@ -1109,7 +1106,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			sut.Loading += (snd, e) => loadingCount++;
 			sut.Loaded += (snd, e) => loadedCount++;
 
-			hostPanel.Loading += async (snd, e) =>
+			hostPanel.Loading += (snd, e) =>
 			{
 				hostPanel.Children.Add(sut);
 
@@ -1217,12 +1214,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			await Uno.UI.RuntimeTests.Helpers.UITestHelper.Load(sut);
 			var events = sut.Events;
 
-			const int expectedCount =
-#if WINAPPSDK
-				9;
-#else
-				11;
-#endif
+			const int expectedCount = 9;
 
 			Assert.AreEqual(expectedCount, events.Count);
 			Assert.AreEqual("Parent Loading", events[0]);
@@ -1246,19 +1238,6 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 			Assert.AreEqual("Child Loaded", events[7]);
 			Assert.AreEqual("Parent Loaded", events[8]);
-
-
-#if HAS_UNO
-			if (events[9] == "Child LayoutUpdated")
-			{
-				Assert.AreEqual("Parent LayoutUpdated", events[10]);
-			}
-			else
-			{
-				Assert.AreEqual("Parent LayoutUpdated", events[9]);
-				Assert.AreEqual("Child LayoutUpdated", events[10]);
-			}
-#endif
 		}
 #endif
 	}

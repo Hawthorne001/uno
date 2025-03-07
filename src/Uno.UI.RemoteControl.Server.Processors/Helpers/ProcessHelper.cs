@@ -6,11 +6,15 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using Microsoft.Extensions.Logging;
+using Uno.Extensions;
 
-namespace Uno.UI.RemoteControl.Server.Processors.Helpers
+namespace Uno.UI.RemoteControl.Helpers
 {
 	internal class ProcessHelper
 	{
+		private static readonly ILogger _log = typeof(ProcessHelper).Log();
+
 		public static (int exitCode, string output, string error) RunProcess(string executable, string parameters, string? workingDirectory = null)
 		{
 			if (!OperatingSystem.IsWindows()
@@ -19,11 +23,18 @@ namespace Uno.UI.RemoteControl.Server.Processors.Helpers
 				executable = Path.GetFileNameWithoutExtension(executable);
 			}
 
+			if (_log.IsEnabled(LogLevel.Trace))
+			{
+				_log.LogTrace($"Executing '{executable} {parameters}' in '{workingDirectory ?? Environment.CurrentDirectory}'");
+			}
+
 			var p = new Process
 			{
 				StartInfo =
 				{
 					UseShellExecute = false,
+					CreateNoWindow = true,
+					WindowStyle = ProcessWindowStyle.Hidden,
 					RedirectStandardOutput = true,
 					RedirectStandardError = true,
 					FileName = executable,
