@@ -88,7 +88,8 @@ internal class PackageManifest
 			if (Manifest.Any(x => x.Group.Equals(groupName, StringComparison.InvariantCultureIgnoreCase)))
 			{
 				var group = Manifest.Single(x => x.Group.Equals(groupName, StringComparison.InvariantCultureIgnoreCase));
-				var updated = group with { Version = version! };
+				var updated = group with { Version = version!, VersionOverride = null };
+
 				Manifest.Remove(group);
 				Manifest.Add(updated);
 			}
@@ -136,6 +137,9 @@ internal class PackageManifest
 		public const string UniversalImageLoading = nameof(UniversalImageLoading);
 		public const string Dsp = nameof(Dsp);
 		public const string Resizetizer = nameof(Resizetizer);
+		public const string SdkExtras = nameof(SdkExtras);
+		public const string Settings = nameof(Settings);
+		public const string HotDesign = nameof(HotDesign);
 		public const string SkiaSharp = nameof(SkiaSharp);
 		public const string SvgSkia = nameof(SvgSkia);
 		public const string WinAppSdk = nameof(WinAppSdk);

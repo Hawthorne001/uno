@@ -11,7 +11,7 @@ uid: Uno.GettingStarted.CreateAnApp.Rider
 
 > [!IMPORTANT]
 >
-> - **Rider (2024.2 and above)**: For Rider (2024.2 and above), we have released a Preview version of the Uno Platform Plugin that supports creating Uno Platform projects using the "New Solution" dialog.
+> - **Rider (2024.2 and above)**: For Rider (2024.2 and above), we have released versions of the Uno Platform Plugin that support creating Uno Platform projects using the "New Solution" dialog.
 >   Make sure to follow the directions for **Rider 2024.2** provided below.
 >
 > - **Rider (2024.1 and earlier)**: Current versions of Rider (2024.1 and earlier) do not support creating Uno Platform projects using the "New Solution" dialog, even if the Uno Platform project template appears.
@@ -74,7 +74,15 @@ Creating an Uno Platform project is done [using dotnet new](xref:Uno.GetStarted.
 ---
 
 > [!IMPORTANT]
-> A notification window will appear for the free registration of the extension. If the notification disappears before you can enter the license, you can find it again in the "Notification Bell" icon at the top right of the Rider window.
+> A notification should appear prompting you to sign in or register with Uno Platform.
+>
+> Signing in with your Uno Platform account in Rider unlocks powerful tools like Hot Reload, helping you speed up development.
+>
+> With a single registration, you also gain early access to new features and the opportunity to connect with the Uno Platform community, where you can share feedback and network.
+>
+> Detailed information on registration and sign-in is available <a href="https://aka.platform.uno/account-access" target="_blank">here</a>.
+>
+> ![Uno Platform Sign in / Register notification](Assets/uno-settings-rider-notification.png)
 
 ### Considerations for macOS and Linux
 
@@ -85,15 +93,15 @@ To correct this, you'll need to modify your `csproj` file in order to make the p
 You can change this line:
 
 ```xml
-<TargetFrameworks>net8.0-android;net8.0-ios;net8.0-maccatalyst;net8.0-windows10.0.19041;net8.0-browserwasm;net8.0-desktop</TargetFrameworks>
+<TargetFrameworks>net9.0-android;net9.0-ios;net9.0-maccatalyst;net9.0-windows10.0.26100;net9.0-browserwasm;net9.0-desktop</TargetFrameworks>
 ```
 
 To be:
 
 ```xml
-<TargetFrameworks>net8.0-android;net8.0-browserwasm;net8.0-desktop</TargetFrameworks>
-<TargetFrameworks Condition=" $([MSBuild]::IsOSPlatform('windows')) ">$(TargetFrameworks);net8.0-windows10.0.19041</TargetFrameworks>
-<TargetFrameworks Condition=" !$([MSBuild]::IsOSPlatform('linux')) ">$(TargetFrameworks);net8.0-ios;net8.0-maccatalyst</TargetFrameworks>
+<TargetFrameworks>net9.0-android;net9.0-browserwasm;net9.0-desktop</TargetFrameworks>
+<TargetFrameworks Condition=" $([MSBuild]::IsOSPlatform('windows')) ">$(TargetFrameworks);net9.0-windows10.0.26100</TargetFrameworks>
+<TargetFrameworks Condition=" !$([MSBuild]::IsOSPlatform('linux')) ">$(TargetFrameworks);net9.0-ios;net9.0-maccatalyst</TargetFrameworks>
 ```
 
 Make sure to adjust the list of target frameworks based on the platforms you have in your original list.

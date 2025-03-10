@@ -5,7 +5,7 @@ using Windows.Graphics;
 
 namespace Uno.UI.Xaml.Controls;
 
-internal partial class NativeWindowWrapper : NativeWindowWrapperBase
+internal partial class NativeWindowWrapper : NativeWindowWrapperBase, INativeWindowWrapper
 {
 	private static readonly Lazy<NativeWindowWrapper> _instance = new(() => new NativeWindowWrapper());
 
@@ -30,6 +30,6 @@ internal partial class NativeWindowWrapper : NativeWindowWrapperBase
 
 		Bounds = bounds;
 		VisibleBounds = bounds;
-		Size = bounds.Size.ToSizeInt32();
+		Size = new((int)(bounds.Width * RasterizationScale), (int)(bounds.Height * RasterizationScale));
 	}
 }

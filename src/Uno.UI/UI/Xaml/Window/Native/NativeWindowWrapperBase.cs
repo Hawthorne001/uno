@@ -47,7 +47,11 @@ internal abstract class NativeWindowWrapperBase : INativeWindowWrapper
 
 	public ContentSiteView ContentSiteView => _contentSite.View;
 
-	protected XamlRoot? XamlRoot => _xamlRoot;
+	internal protected XamlRoot? XamlRoot => _xamlRoot;
+
+	internal protected Window? Window => _window;
+
+	public bool WasShown { get; private set; }
 
 	internal void SetWindow(Window window, XamlRoot xamlRoot)
 	{
@@ -179,22 +183,46 @@ internal abstract class NativeWindowWrapperBase : INativeWindowWrapper
 	public event EventHandler<AppWindowClosingEventArgs>? Closing;
 	public event EventHandler? Shown;
 
-	public virtual void Activate() { }
-
-	public virtual void Close()
+	internal protected virtual void Activate()
 	{
+	}
+
+	protected virtual void CloseCore()
+	{
+	}
+
+	public void Close()
+	{
+		CloseCore();
+
 		IsVisible = false;
+
+		// Allow the window to be re-shown on single-window targets.
+		if (!NativeWindowFactory.SupportsMultipleWindows)
+		{
+			WasShown = false;
+		}
 	}
 
 	public virtual void ExtendContentIntoTitleBar(bool extend) { }
 
-	public virtual void Show()
+	public virtual void Show(bool activateWindow)
 	{
-		ShowCore();
-		// On single-window targets, the window is already shown with splash screen
-		// so we must ensure the property is initialized correctly.
-		IsVisible = true;
-		Shown?.Invoke(this, EventArgs.Empty);
+		if (!WasShown)
+		{
+			WasShown = true;
+			ShowCore();
+
+			// On single-window targets, the window is already shown with splash screen
+			// so we must ensure the property is initialized correctly.
+			IsVisible = true;
+			Shown?.Invoke(this, EventArgs.Empty);
+		}
+
+		if (activateWindow)
+		{
+			Activate();
+		}
 	}
 
 	protected virtual void ShowCore() { }
@@ -246,12 +274,7 @@ internal abstract class NativeWindowWrapperBase : INativeWindowWrapper
 
 	public void Hide() { }
 
-	public void Show(bool activateWindow)
-	{
-		Show();
-		if (activateWindow)
-		{
-			Activate();
-		}
-	}
+#if __IOS__ || __MACOS__
+	public abstract Size GetWindowSize();
+#endif
 }

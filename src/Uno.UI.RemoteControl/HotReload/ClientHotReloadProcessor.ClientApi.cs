@@ -1,4 +1,4 @@
-﻿#if HAS_UNO_WINUI && __SKIA__
+﻿#if HAS_UNO_WINUI
 
 using System;
 using System.Diagnostics;
@@ -21,7 +21,7 @@ public partial class ClientHotReloadProcessor
 	/// <summary>
 	/// Result details of a file update
 	/// </summary>
-	/// <param name="FileUpdated">Indicates if is known to have been updated on server-side.</param>
+	/// <param name="FileUpdated">Indicates if file is known to have been updated on server-side.</param>
 	/// <param name="ApplicationUpdated">Indicates if the change had an impact on the compilation of the application (might be a success-full build or an error).</param>
 	/// <param name="Error">Gets the error if any happened during the update.</param>
 	public record struct UpdateResult(
@@ -38,10 +38,19 @@ public partial class ClientHotReloadProcessor
 	/// <param name="WaitForHotReload">Indicates if we should also wait for the change to be applied in the application before completing the resulting task.</param>
 	public record struct UpdateRequest(
 		string FilePath,
-		string OldText,
-		string NewText,
+		string? OldText,
+		string? NewText,
 		bool WaitForHotReload = true)
 	{
+		/// <summary>
+		/// Indicates if the file should be saved to disk.
+		/// </summary>
+		/// <remarks>
+		/// Some IDE supports the ability to update the file in memory without saving it to disk.
+		/// Null means that the default behavior of the IDE should be used.
+		/// </remarks>
+		public bool? ForceSaveToDisk { get; init; }
+
 		/// <summary>
 		/// The max delay to wait for the server to process a file update request.
 		/// </summary>
@@ -61,7 +70,17 @@ public partial class ClientHotReloadProcessor
 		/// The max delay to wait for the local application to process a hot-reload delta.
 		/// </summary>
 		/// <remarks>This includes the time to apply the delta locally and then to run all local handlers.</remarks>
-		public TimeSpan LocalHotReloadTimeout { get; set; } = TimeSpan.FromSeconds(3);
+		public TimeSpan LocalHotReloadTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+		/// <summary>
+		/// When <see cref="WaitForHotReload"/> the delay to wait before retrying a hot-reload in Visual Studio if no changes are detected.
+		/// </summary>
+		public TimeSpan? HotReloadNoChangesRetryDelay { get; set; }
+
+		/// <summary>
+		/// When <see cref="WaitForHotReload"/> the number of times to retry the hot reload in Visual Studio if no changes are detected.
+		/// </summary>
+		public int? HotReloadNoChangesRetryAttempts { get; set; }
 
 		public UpdateRequest WithExtendedTimeouts(float? factor = null)
 		{
@@ -82,8 +101,11 @@ public partial class ClientHotReloadProcessor
 			=> this with { OldText = NewText, NewText = OldText, WaitForHotReload = waitForHotReload };
 	}
 
-	public Task UpdateFileAsync(string filePath, string oldText, string newText, bool waitForHotReload, CancellationToken ct)
+	public Task UpdateFileAsync(string filePath, string? oldText, string newText, bool waitForHotReload, CancellationToken ct)
 		=> UpdateFileAsync(new UpdateRequest(filePath, oldText, newText, waitForHotReload), ct);
+
+	public Task UpdateFileAsync(string filePath, string? oldText, string newText, bool waitForHotReload, bool forceSaveToDisk, CancellationToken ct)
+		=> UpdateFileAsync(new UpdateRequest(filePath, oldText, newText, waitForHotReload) { ForceSaveToDisk = forceSaveToDisk }, ct);
 
 	public async Task UpdateFileAsync(UpdateRequest req, CancellationToken ct)
 	{
@@ -93,7 +115,7 @@ public partial class ClientHotReloadProcessor
 		}
 	}
 
-	public Task TryUpdateFileAsync(string filePath, string oldText, string newText, bool waitForHotReload, CancellationToken ct)
+	public Task TryUpdateFileAsync(string filePath, string? oldText, string newText, bool waitForHotReload, CancellationToken ct)
 		=> TryUpdateFileAsync(new UpdateRequest(filePath, oldText, newText, waitForHotReload), ct);
 
 	public async Task<UpdateResult> TryUpdateFileAsync(UpdateRequest req, CancellationToken ct)
@@ -111,12 +133,20 @@ public partial class ClientHotReloadProcessor
 			var debug = log.IsDebugEnabled(LogLevel.Debug) ? log : default;
 			var tag = $"[{Interlocked.Increment(ref _reqId):D2}-{Path.GetFileName(req.FilePath)}]";
 
-			debug?.Debug($"{tag} Updating file {req.FilePath} (from: {req.OldText[..100]} | to: {req.NewText[..100]}.");
+			debug?.Debug($"{tag} Updating file {req.FilePath} (from: {req.OldText?[..100]} | to: {req.NewText?[..100]}.");
 
 			// As the local HR is not really ID trackable (trigger by VS without any ID), we capture the current ID here to make sure that if HR completes locally before we get info from the server, we won't miss it.
 			var currentLocalHrId = GetCurrentLocalHotReloadId();
 
-			var request = new UpdateFile { FilePath = req.FilePath, OldText = req.OldText, NewText = req.NewText };
+			var request = new UpdateFile
+			{
+				FilePath = req.FilePath,
+				OldText = req.OldText,
+				NewText = req.NewText,
+				ForceHotReloadDelay = req.HotReloadNoChangesRetryDelay,
+				ForceHotReloadAttempts = req.HotReloadNoChangesRetryAttempts,
+				ForceSaveOnDisk = req.ForceSaveToDisk,
+			};
 			var response = await UpdateFileCoreAsync(request, req.ServerUpdateTimeout, ct);
 
 			if (response.Result is FileUpdateResult.NoChanges)
