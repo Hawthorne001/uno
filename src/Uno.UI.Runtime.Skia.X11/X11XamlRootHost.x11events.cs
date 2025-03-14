@@ -1,12 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
-using Windows.Foundation;
 using Windows.System;
 using Windows.UI.Core;
-using Microsoft.UI.Xaml;
 using Uno.Foundation.Logging;
 using Uno.UI.Hosting;
 
@@ -20,8 +17,6 @@ internal partial class X11XamlRootHost
 	private readonly Action<bool> _focusCallback;
 	private readonly Action<bool> _visibilityCallback;
 	private readonly Action _configureCallback;
-
-	private int _needsConfigureCallback;
 
 	private X11PointerInputSource? _pointerSource;
 	private X11KeyboardInputSource? _keyboardSource;
@@ -90,7 +85,7 @@ internal partial class X11XamlRootHost
 		{
 			var ret = X11Helper.poll(fds, 1, 1000); // timeout every second to see if the window is closed
 
-			if (_closed.Task.IsCompleted)
+			if (Closed.IsCompleted)
 			{
 				SynchronizedShutDown(x11Window);
 				return;
@@ -176,7 +171,8 @@ internal partial class X11XamlRootHost
 							break;
 					}
 				}
-				else if (@event.AnyEvent.window == x11Window.Window)
+				else if (@event.AnyEvent.window == x11Window.Window ||
+					(@event.type is XEventName.GenericEvent && @event.GenericEventCookie.extension == GetXI2Details(x11Window.Window).opcode))
 				{
 					switch (@event.type)
 					{
@@ -199,7 +195,7 @@ internal partial class X11XamlRootHost
 							}
 							break;
 						case XEventName.ConfigureNotify:
-							Interlocked.Exchange(ref _needsConfigureCallback, 1);
+							RaiseConfigureCallback();
 							break;
 						case XEventName.FocusIn:
 							QueueAction(this, () => _focusCallback(true));
@@ -211,7 +207,7 @@ internal partial class X11XamlRootHost
 							QueueAction(this, () => _visibilityCallback(@event.VisibilityEvent.state != /* VisibilityFullyObscured */ 2));
 							break;
 						case XEventName.Expose:
-							QueueAction(this, () => ((IXamlRootHost)this).InvalidateRender());
+							((IXamlRootHost)this).InvalidateRender();
 							break;
 						case XEventName.MotionNotify:
 							_pointerSource?.ProcessMotionNotifyEvent(@event.MotionEvent);
@@ -227,6 +223,26 @@ internal partial class X11XamlRootHost
 							break;
 						case XEventName.EnterNotify:
 							_pointerSource?.ProcessEnterEvent(@event.CrossingEvent);
+							break;
+						case XEventName.GenericEvent:
+							var eventWithData = @event;
+							var cookiePtr = &eventWithData.GenericEventCookie;
+							var getEventDataSucceeded = XLib.XGetEventData(TopX11Window.Display, cookiePtr);
+
+							try
+							{
+								if (getEventDataSucceeded && _pointerSource is { } pointerSource)
+								{
+									pointerSource.HandleXI2Event(eventWithData);
+								}
+							}
+							finally
+							{
+								if (getEventDataSucceeded)
+								{
+									XLib.XFreeEventData(TopX11Window.Display, cookiePtr);
+								}
+							}
 							break;
 						case XEventName.KeyPress:
 							_keyboardSource?.ProcessKeyboardEvent(@event.KeyEvent, true);

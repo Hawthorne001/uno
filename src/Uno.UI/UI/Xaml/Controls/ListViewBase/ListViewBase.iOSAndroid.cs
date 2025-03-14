@@ -53,7 +53,7 @@ namespace Microsoft.UI.Xaml.Controls
 			}
 		}
 
-		partial void OnApplyTemplatePartial()
+		private protected override void OnItemsPanelRootPrepared()
 		{
 			// NativePanel may not exist if we're using a non-virtualizing ItemsPanel.
 			if (NativePanel != null)
@@ -106,6 +106,8 @@ namespace Microsoft.UI.Xaml.Controls
 				return base.ResolveInternalItemsPanel(itemsPanel);
 			}
 		}
+
+		partial void PrepareNativeLayout(VirtualizingPanelLayout layout);
 
 		protected internal override void CleanUpInternalItemsPanel(_ViewGroup panel)
 		{

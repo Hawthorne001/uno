@@ -60,7 +60,7 @@ partial class BorderLayerRenderer
 	/// <param name="borderBrush">The border brush</param>
 	/// <param name="cornerRadius">The corner radius</param>
 	/// <returns>An updated BoundsPath if the layer has been created or updated; null if there is no change.</returns>
-	partial void UpdatePlatform()
+	partial void UpdatePlatform(bool forceUpdate)
 	{
 		// Bounds is captured to avoid calling twice calls below.
 		var bounds = _owner.Bounds;
@@ -72,7 +72,7 @@ partial class BorderLayerRenderer
 			_borderInfoProvider.BorderBrush,
 			_borderInfoProvider.BorderThickness,
 			_borderInfoProvider.CornerRadius);
-		if (!newState.Equals(_currentState))
+		if (!newState.Equals(_currentState) || forceUpdate)
 		{
 #if __MACOS__
 			_owner.WantsLayer = true;
@@ -228,8 +228,8 @@ partial class BorderLayerRenderer
 			{
 				Action onInvalidateRender = () => backgroundLayer.FillColor = Brush.GetFallbackColor(background);
 				onInvalidateRender();
-				background.InvalidateRender += onInvalidateRender;
-				new DisposableAction(() => background.InvalidateRender -= onInvalidateRender).DisposeWith(disposables);
+
+				background.RegisterInvalidateRender(onInvalidateRender).DisposeWith(disposables);
 			}
 			else
 			{
@@ -277,16 +277,8 @@ partial class BorderLayerRenderer
 					GC.KeepAlive(color);
 				};
 
-				if (borderBrush is null)
-				{
-					onInvalidateRender();
-				}
-				else
-				{
-					onInvalidateRender();
-					borderBrush.InvalidateRender += onInvalidateRender;
-					new DisposableAction(() => borderBrush.InvalidateRender -= onInvalidateRender).DisposeWith(disposables);
-				}
+				onInvalidateRender();
+				borderBrush?.RegisterInvalidateRender(onInvalidateRender).DisposeWith(disposables);
 			}
 
 			parent.Mask = new CAShapeLayer()
@@ -334,9 +326,7 @@ partial class BorderLayerRenderer
 				Action onInvalidateRender = () => backgroundLayer.FillColor = Brush.GetFallbackColor(background);
 
 				onInvalidateRender();
-				background.InvalidateRender += onInvalidateRender;
-				new DisposableAction(() => background.InvalidateRender -= onInvalidateRender)
-					.DisposeWith(disposables);
+				background.RegisterInvalidateRender(onInvalidateRender).DisposeWith(disposables);
 
 				// This is required because changing the CornerRadius changes the background drawing
 				// implementation and we don't want a rectangular background behind a rounded background.
@@ -362,10 +352,8 @@ partial class BorderLayerRenderer
 			else if (background is XamlCompositionBrushBase)
 			{
 				Action onInvalidateRender = () => backgroundLayer.FillColor = Brush.GetFallbackColor(background);
-				background.InvalidateRender += onInvalidateRender;
+				background.RegisterInvalidateRender(onInvalidateRender).DisposeWith(disposables);
 				onInvalidateRender();
-				new DisposableAction(() => background.InvalidateRender -= onInvalidateRender)
-					.DisposeWith(disposables);
 
 				// This is required because changing the CornerRadius changes the background drawing
 				// implementation and we don't want a rectangular background behind a rounded background.
@@ -417,8 +405,7 @@ partial class BorderLayerRenderer
 					Action onInvalidateRender = () => layer.FillColor = Brush.GetFallbackColor(borderBrush);
 
 					onInvalidateRender();
-					borderBrush.InvalidateRender += onInvalidateRender;
-					new DisposableAction(() => borderBrush.InvalidateRender -= onInvalidateRender).DisposeWith(disposables);
+					borderBrush?.RegisterInvalidateRender(onInvalidateRender).DisposeWith(disposables);
 				}
 			}
 
@@ -427,13 +414,19 @@ partial class BorderLayerRenderer
 			sublayers.Add(backgroundLayer);
 			parent.InsertSublayer(backgroundLayer, insertionIndex);
 
-			parent.Mask = new CAShapeLayer()
+			// Normally, the parent.Mask (or owner.Layer.Mask) is usually cleared by ApplyNativeClip that follows.
+			// However, on device rotation (portrait <-> landscape), ApplyNativeClip happens before this method, causing the view to have an unwanted clipping.
+			// Here, we are reusing the logics of ApplyNativeClip to decide when to not apply the mask (as it would be cleared anyways).
+			if (owner.GetNativeClippedViewport().IsFinite)
 			{
-				Path = outerPath,
-				Frame = area,
-				// We only use the fill color to create the mask area
-				FillColor = _Color.White.CGColor,
-			};
+				parent.Mask = new CAShapeLayer()
+				{
+					Path = outerPath,
+					Frame = area,
+					// We only use the fill color to create the mask area
+					FillColor = _Color.White.CGColor,
+				};
+			}
 
 			updatedBoundsPath = outerPath;
 		}
