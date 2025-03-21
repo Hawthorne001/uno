@@ -35,6 +35,8 @@ using Windows.ApplicationModel.Core;
 using Microsoft.UI.Input;
 using Uno.UI.Xaml.Media;
 using Uno.UI.Xaml.Core.Scaling;
+using System.Diagnostics.CodeAnalysis;
+
 
 #if __IOS__
 using UIKit;
@@ -45,6 +47,9 @@ namespace Microsoft.UI.Xaml
 	public partial class UIElement : DependencyObject, IXUidProvider
 	{
 		private protected static bool _traceLayoutCycle;
+#if !__SKIA__
+		private bool _warnedAboutTranslation;
+#endif
 
 		private static readonly TypedEventHandler<UIElement, BringIntoViewRequestedEventArgs> OnBringIntoViewRequestedHandler =
 			(UIElement sender, BringIntoViewRequestedEventArgs args) => sender.OnBringIntoViewRequested(args);
@@ -57,9 +62,6 @@ namespace Microsoft.UI.Xaml
 
 		private InputCursor _protectedCursor;
 		private SerialDisposable _disposedEventDisposable = new();
-
-		internal void FreezeTemplatedParent() =>
-			((IDependencyObjectStoreProvider)this).Store.IsTemplatedParentFrozen = true;
 
 		public Size DesiredSize => Visibility == Visibility.Visible && HasLayoutStorage ? m_desiredSize : default;
 
@@ -124,6 +126,7 @@ namespace Microsoft.UI.Xaml
 		}
 #endif
 
+		[UnconditionalSuppressMessage("Trimming", "IL2072", Justification = "Types manipulated here have been marked earlier")]
 		private void SubscribeToOverridenRoutedEvents()
 		{
 			// Overridden Events are registered from constructor to ensure they are
@@ -138,7 +141,9 @@ namespace Microsoft.UI.Xaml
 			}
 		}
 
-		internal static RoutedEventFlag GetImplementedRoutedEventsForType(Type type)
+		internal static RoutedEventFlag GetImplementedRoutedEventsForType(
+			[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.NonPublicMethods)]
+			Type type)
 		{
 			if (UIElementGeneratedProxy.TryGetImplementedRoutedEvents(type, out var result))
 			{
@@ -167,7 +172,9 @@ namespace Microsoft.UI.Xaml
 			return implementedRoutedEvents;
 		}
 
-		internal static RoutedEventFlag EvaluateImplementedUIElementRoutedEvents(Type type)
+		internal static RoutedEventFlag EvaluateImplementedUIElementRoutedEvents(
+			[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.NonPublicMethods)]
+			Type type)
 		{
 			RoutedEventFlag result = RoutedEventFlag.None;
 
@@ -184,7 +191,11 @@ namespace Microsoft.UI.Xaml
 			InvalidateMeasure();
 		}
 
-		private protected static bool GetIsEventOverrideImplemented(Type type, string name, Type[] args)
+		private protected static bool GetIsEventOverrideImplemented(
+			[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.NonPublicMethods)]
+			Type type,
+			string name,
+			Type[] args)
 		{
 			var method = type
 				.GetMethod(
@@ -257,6 +268,19 @@ namespace Microsoft.UI.Xaml
 				if (_translation != value)
 				{
 					_translation = value;
+
+#if !__SKIA__
+					if (!_warnedAboutTranslation &&
+						(_translation.X != 0 || _translation.Y != 0))
+					{
+						_warnedAboutTranslation = true;
+						if (this.Log().IsEnabled(LogLevel.Warning))
+						{
+							this.Log().LogWarning("Translation supports only Z-axis on this target.");
+						}
+					}
+#endif
+
 					UpdateShadow();
 					InvalidateArrange();
 				}
@@ -658,7 +682,7 @@ namespace Microsoft.UI.Xaml
 		}
 #endif
 
-#if !__IOS__ && !__ANDROID__ && !__MACOS__ // This is the default implementation, but it can be customized per platform
+#if !__IOS__ && !__ANDROID__ && !__MACOS__ && !__SKIA__ // This is the default implementation, but it can be customized per platform
 		/// <summary>
 		/// Note: Offsets are only an approximation that does not take into consideration possible transformations
 		///	applied by a 'UIView' between this element and its parent UIElement.
@@ -747,7 +771,7 @@ namespace Microsoft.UI.Xaml
 				return;
 			}
 
-			var root = XamlRoot?.VisualTree.RootElement;
+			var root = XamlRoot?.VisualTree.RootElement ?? this.GetContext().MainVisualTree?.RootElement;
 			if (root is null)
 			{
 				return;
@@ -934,6 +958,16 @@ namespace Microsoft.UI.Xaml
 #elif __WASM__
 			InvalidateArrange();
 #else
+			var rect = GetNativeClippedViewport();
+
+			ApplyNativeClip(rect);
+			OnViewportUpdated(rect);
+#endif
+		}
+
+#if !(__SKIA__ || __WASM__)
+		internal Rect GetNativeClippedViewport()
+		{
 			Rect rect;
 
 			if (Clip == null)
@@ -960,10 +994,9 @@ namespace Microsoft.UI.Xaml
 				}
 			}
 
-			ApplyNativeClip(rect);
-			OnViewportUpdated(rect);
-#endif
+			return rect;
 		}
+#endif
 
 		partial void ApplyNativeClip(Rect rect
 #if __SKIA__
@@ -999,6 +1032,8 @@ namespace Microsoft.UI.Xaml
 		/// parameters passing on iOS, where the number of parameters follows a unconventional set of rules. Using
 		/// a single parameter with a simple delimitation format fits all platforms with little overhead.
 		/// </remarks>
+		[UnconditionalSuppressMessage("Trimming", "IL2077", Justification = "Types manipulated here have been marked earlier")]
+		[UnconditionalSuppressMessage("Trimming", "IL2072", Justification = "Types manipulated here have been marked earlier")]
 		internal static string SetDependencyPropertyValueInternal(DependencyObject owner, string dependencyPropertyNameAndValue)
 		{
 			var s = dependencyPropertyNameAndValue;
@@ -1149,9 +1184,6 @@ namespace Microsoft.UI.Xaml
 			// Use a non-virtual version of the RequestLayout method, for performance.
 			base.RequestLayout();
 			SetLayoutFlags(LayoutFlag.MeasureDirty);
-
-			// HACK: Android's implementation of measure/arrange is not accurate. See comments in LayouterElementExtensions.DoMeasure
-			(VisualTreeHelper.GetParent(this) as UIElement)?.InvalidateMeasure();
 #elif __IOS__
 			SetNeedsLayout();
 			SetLayoutFlags(LayoutFlag.MeasureDirty);
@@ -1300,6 +1332,7 @@ namespace Microsoft.UI.Xaml
 #endif
 		}
 
+#if __SKIA__
 		private static double LayoutRound(double value, double scaleFactor)
 		{
 			double returnValue = value;
@@ -1323,14 +1356,15 @@ namespace Microsoft.UI.Xaml
 			return returnValue;
 		}
 
-		// GetScaleFactorForLayoutRounding() returns the plateau scale in most cases. For ScrollContentPresenter children though,
-		// the plateau scale gets combined with the owning ScrollViewer's ZoomFactor if headers are present.
-		internal double GetScaleFactorForLayoutRounding() => RootScale.GetRasterizationScaleForElement(this);
-
 		private static double XcpRound(double x)
 		{
 			return Math.Round(x);
 		}
+#endif
+
+		// GetScaleFactorForLayoutRounding() returns the plateau scale in most cases. For ScrollContentPresenter children though,
+		// the plateau scale gets combined with the owning ScrollViewer's ZoomFactor if headers are present.
+		internal double GetScaleFactorForLayoutRounding() => RootScale.GetRasterizationScaleForElement(this);
 
 		public XYFocusKeyboardNavigationMode XYFocusKeyboardNavigation
 		{

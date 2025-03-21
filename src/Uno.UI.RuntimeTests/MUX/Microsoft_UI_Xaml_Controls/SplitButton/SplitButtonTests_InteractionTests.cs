@@ -100,12 +100,12 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
 
 			Log.Comment("Click primary button with SPACE key to execute command");
 			// ClickPrimaryButtonWithKey(splitButton, "SPACE");
-			KeyboardHelper.Space(splitButton);
+			await KeyboardHelper.Space(splitButton);
 			Verify.AreEqual("2", executeCountTextBlock.Text);
 
 			Log.Comment("Click primary button with ENTER key to execute command");
 			// ClickPrimaryButtonWithKey(splitButton, "ENTER");
-			KeyboardHelper.Enter(splitButton);
+			await KeyboardHelper.Enter(splitButton);
 			Verify.AreEqual("3", executeCountTextBlock.Text);
 
 			Log.Comment("Use invoke pattern to execute command");
@@ -154,17 +154,19 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
 			Verify.AreEqual("0", clickCountTextBlock.Text);
 			Verify.AreEqual("0", flyoutOpenedCountTextBlock.Text);
 
-			Log.Comment("Click primary button to open flyout in touch mode");
+			Log.Comment("Click primary button in touch mode");
 			// ClickPrimaryButton(splitButton);
 			await ClickPrimaryButton(splitButton, finger);
 			await WindowHelper.WaitForIdle();
 
-			// Uno TODO: the test outputs 1 and 0 instead of 1 and 0
-			// This works correctly when manually testing by hand, but fails in the runtime tests.
-			// Verify.AreEqual("0", clickCountTextBlock.Text);
-			// Verify.AreEqual("1", flyoutOpenedCountTextBlock.Text);
 			Verify.AreEqual("1", clickCountTextBlock.Text);
 			Verify.AreEqual("0", flyoutOpenedCountTextBlock.Text);
+
+			Log.Comment("Click secondary button in touch mode");
+			await ClickSecondaryButton(splitButton, finger);
+
+			Verify.AreEqual("1", clickCountTextBlock.Text);
+			Verify.AreEqual("1", flyoutOpenedCountTextBlock.Text);
 
 			Log.Comment("Close flyout by clicking over the button");
 			// splitButton.Click();
@@ -238,19 +240,19 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
 			// splitButton.SetFocus();
 			splitButton.Focus(FocusState.Programmatic);
 			await WindowHelper.WaitForIdle();
-			KeyboardHelper.Space();
+			await KeyboardHelper.Space();
 			await WindowHelper.WaitForIdle();
 			Verify.AreEqual("1", clickCountTextBlock.Text);
 
 			Verify.AreEqual("0", flyoutOpenedCountTextBlock.Text);
 			Log.Comment("Verify that pressing alt-down on SplitButton opens the flyout");
-			KeyboardHelper.PressKeySequence("$d$_alt#$d$_down#$u$_down#$u$_alt");
+			await KeyboardHelper.PressKeySequence("$d$_alt#$d$_down#$u$_down#$u$_alt");
 			await WindowHelper.WaitForIdle();
 			Verify.AreEqual("1", flyoutOpenedCountTextBlock.Text);
 
 			Verify.AreEqual("0", flyoutClosedCountTextBlock.Text);
 			Log.Comment("Verify that pressing escape closes the flyout");
-			KeyboardHelper.Escape();
+			await KeyboardHelper.Escape();
 			await WindowHelper.WaitForIdle();
 			Verify.AreEqual("1", flyoutClosedCountTextBlock.Text);
 
@@ -259,7 +261,7 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
 			splitButton.Focus(FocusState.Programmatic);
 			await WindowHelper.WaitForIdle();
 			// TextInput.SendText("{F4}");
-			KeyboardHelper.PressKeySequence("$d$_f4#$u$_f4");
+			await KeyboardHelper.PressKeySequence("$d$_f4#$u$_f4");
 			await WindowHelper.WaitForIdle();
 			Verify.AreEqual("2", flyoutOpenedCountTextBlock.Text);
 		}

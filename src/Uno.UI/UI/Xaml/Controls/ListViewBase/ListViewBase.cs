@@ -560,17 +560,13 @@ namespace Microsoft.UI.Xaml.Controls
 
 			foreach (var item in GetItemsPanelChildren().OfType<SelectorItem>())
 			{
-				ApplyMultiSelectState(item);
+				item.UpdateMultiSelectStates(useTransitions: item.IsLoaded);
 			}
 
 			ApplyMultiSelectStateToCachedItems();
 		}
 
 		partial void ApplyMultiSelectStateToCachedItems();
-
-		partial void PrepareNativeLayout(VirtualizingPanelLayout layout);
-
-
 
 		internal override void OnItemClicked(int clickedIndex, VirtualKeyModifiers modifiers)
 		{
@@ -1074,7 +1070,7 @@ namespace Microsoft.UI.Xaml.Controls
 
 			if (element is SelectorItem selectorItem)
 			{
-				ApplyMultiSelectState(selectorItem);
+				selectorItem.UpdateMultiSelectStates(useTransitions: selectorItem.IsLoaded);
 			}
 		}
 
@@ -1092,15 +1088,6 @@ namespace Microsoft.UI.Xaml.Controls
 			ClearContainerForDragDrop(itemContainer);
 
 			base.ContainerClearedForItem(item, itemContainer);
-		}
-
-		/// <summary>
-		/// Apply the multi-selection state to the provided item
-		/// </summary>
-		/// <param name="selectorItem"></param>
-		internal void ApplyMultiSelectState(SelectorItem selectorItem)
-		{
-			selectorItem.ApplyMultiSelectState(SelectionMode == ListViewSelectionMode.Multiple);
 		}
 
 		/// <summary>
@@ -1148,6 +1135,7 @@ namespace Microsoft.UI.Xaml.Controls
 			}
 		}
 
+#if __IOS__ || __ANDROID__
 		/// <summary>
 		/// Does <paramref name="newItem"/> resolve to a different template than <paramref name="oldItem"/>?
 		/// </summary>
@@ -1160,6 +1148,7 @@ namespace Microsoft.UI.Xaml.Controls
 
 			return ResolveItemTemplate(oldItem) != ResolveItemTemplate(newItem);
 		}
+#endif
 
 		partial void NativeReplaceItems(int firstItem, int count, int section);
 

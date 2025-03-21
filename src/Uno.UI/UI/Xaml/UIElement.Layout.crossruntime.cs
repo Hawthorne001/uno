@@ -20,6 +20,9 @@ namespace Microsoft.UI.Xaml
 		/// </summary>
 		internal bool ShouldInterceptInvalidate { get; set; }
 
+		// In WinUI, this is in LayoutManager. For Uno, we make it static in FE for now.
+		private protected static bool IsInNonClippingTree { get; set; }
+
 		public void InvalidateMeasure()
 		{
 			if (ShouldInterceptInvalidate || IsMeasureDirty || IsLayoutFlagSet(LayoutFlag.MeasuringSelf))
@@ -213,6 +216,12 @@ namespace Microsoft.UI.Xaml
 
 			var remainingTries = MaxLayoutIterations;
 
+			// remember whether we need to set this value back
+			var wasInNonClippingTree = IsInNonClippingTree;
+			// once entering a tree that is non-clipping, we don't get out of it
+			// remember this for down-stream
+			IsInNonClippingTree = IsNonClippingSubtree || wasInNonClippingTree;
+
 			while (--remainingTries > 0)
 			{
 				if (isDirty)
@@ -236,7 +245,6 @@ namespace Microsoft.UI.Xaml
 						if (this.Visibility == Visibility.Collapsed)
 						{
 							m_desiredSize = default;
-							RecursivelyApplyTemplateWorkaround();
 							return;
 						}
 
@@ -306,6 +314,8 @@ namespace Microsoft.UI.Xaml
 
 				break;
 			}
+
+			IsInNonClippingTree = wasInNonClippingTree;
 		}
 
 		internal virtual void MeasureCore(Size availableSize)
@@ -317,29 +327,6 @@ namespace Microsoft.UI.Xaml
 		{
 			return this is Panel; // Restrict to Panels, to limit app-compat risk
 								  //&& !GetIsScrollViewerHeader(); // Special-case:  ScrollViewer Headers, which can zoom, must scale the LayoutClip too
-		}
-
-		private void RecursivelyApplyTemplateWorkaround()
-		{
-			// Uno workaround. The template should NOT be applied here.
-			// But, without this workaround, VerifyVisibilityChangeUpdatesCommandBarVisualState test will fail.
-			// The real root cause for the test failure is that FindParentCommandBarForElement will
-			// return null, that is because Uno doesn't yet properly have a "logical parent" concept.
-			// We eagerly apply the template so that FindParentCommandBarForElement will
-			// find the command bar through TemplatedParent
-			if (this is Control thisAsControl)
-			{
-				thisAsControl.TryCallOnApplyTemplate();
-
-				// Update bindings to ensure resources defined
-				// in visual parents get applied.
-				this.UpdateResourceBindings();
-			}
-
-			foreach (var child in _children)
-			{
-				child.RecursivelyApplyTemplateWorkaround();
-			}
 		}
 
 

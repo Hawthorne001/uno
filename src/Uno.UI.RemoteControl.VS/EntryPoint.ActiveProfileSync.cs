@@ -32,15 +32,23 @@ public partial class EntryPoint : IDisposable
 	private Stopwatch _lastOperation = new Stopwatch();
 	private TimeSpan _profileOrFrameworkDelay = TimeSpan.FromSeconds(1);
 	private bool _pendingRequestedChanged;
+	private bool _isFirstProfileTfmChange = true;
 
 	private async Task OnDebugFrameworkChangedAsync(string? previousFramework, string newFramework, bool forceReload = false)
 	{
 		await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
 		// In this case, a new TargetFramework was selected. We need to file a matching launch profile, if any.
-		if (GetTargetFrameworkIdentifier(newFramework) is { } targetFrameworkIdentifier)
+		if (GetTargetFrameworkIdentifier(newFramework) is { } targetFrameworkIdentifier && _debuggerObserver is not null)
 		{
-			_debugAction?.Invoke($"OnDebugFrameworkChangedAsync({previousFramework}, {newFramework}, {targetFrameworkIdentifier}, forceReload: {forceReload})");
+			var isFirstProfileTfmChange = _isFirstProfileTfmChange;
+			_isFirstProfileTfmChange = false;
+
+			_debugAction?.Invoke($"OnDebugFrameworkChangedAsync({previousFramework}, {newFramework}, {targetFrameworkIdentifier}, forceReload: {forceReload}, isFirstProfileTfmChange:{isFirstProfileTfmChange})");
+
+			// Always synchronize the selected target, the reported value
+			// is the right one.
+			await WriteProjectUserSettingsAsync(newFramework);
 
 			if (!_pendingRequestedChanged && _lastOperation.IsRunning && _lastOperation.Elapsed < _profileOrFrameworkDelay)
 			{
@@ -56,7 +64,7 @@ public partial class EntryPoint : IDisposable
 			_pendingRequestedChanged = false;
 			_lastOperation.Restart();
 
-			if (!forceReload && string.IsNullOrEmpty(previousFramework))
+			if (!isFirstProfileTfmChange && !forceReload && string.IsNullOrEmpty(previousFramework))
 			{
 				// The first change after a reload is always the active target. This happens
 				// when going to/from desktop/wasm for VS issues.
@@ -85,7 +93,7 @@ public partial class EntryPoint : IDisposable
 
 			if (profileFilter is not null)
 			{
-				// If the current profile already matches the targetframework we're going to
+				// If the current profile already matches the TargetFramework we're going to
 				// prefer using it. It can happen if the change is initiated through the profile
 				// selector.
 				var selectedProfile = profiles
@@ -109,10 +117,13 @@ public partial class EntryPoint : IDisposable
 
 	private async Task OnDebugProfileChangedAsync(string? previousProfile, string newProfile)
 	{
-		// In this case, a new TargetFramework was selected. We need to file a matching target framework, if any.
-		_debugAction?.Invoke($"OnDebugProfileChangedAsync({previousProfile},{newProfile})");
+		var isFirstProfileTfmChange = _isFirstProfileTfmChange;
+		_isFirstProfileTfmChange = false;
 
-		if (!_pendingRequestedChanged && _lastOperation.IsRunning && _lastOperation.Elapsed < _profileOrFrameworkDelay)
+		// In this case, a new TargetFramework was selected. We need to file a matching target framework, if any.
+		_debugAction?.Invoke($"OnDebugProfileChangedAsync({previousProfile},{newProfile}) isFirstProfileTfmChange:{isFirstProfileTfmChange}");
+
+		if (!isFirstProfileTfmChange && !_pendingRequestedChanged && _lastOperation.IsRunning && _lastOperation.Elapsed < _profileOrFrameworkDelay)
 		{
 			// This debouncing needs to happen when VS intermittently changes the active
 			// profile or target framework on project reloading. We skip the change if it
@@ -126,11 +137,16 @@ public partial class EntryPoint : IDisposable
 		_pendingRequestedChanged = false;
 		_lastOperation.Restart();
 
-		if (string.IsNullOrEmpty(previousProfile))
+		if (!isFirstProfileTfmChange && string.IsNullOrEmpty(previousProfile))
 		{
 			// The first change after a reload is always the active target. This happens
 			// when going to/from desktop/wasm for VS issues.
 			_debugAction?.Invoke($"Skipping for no previous profile");
+			return;
+		}
+
+		if (_debuggerObserver is null)
+		{
 			return;
 		}
 
@@ -181,8 +197,21 @@ public partial class EntryPoint : IDisposable
 					(
 						previousFramework is not null
 						&& GetTargetFrameworkIdentifier(previousFramework) is { } previousTargetFrameworkIdentifier
-						&& (previousTargetFrameworkIdentifier is WasmTargetFrameworkIdentifier or DesktopTargetFrameworkIdentifier or Windows10TargetFrameworkIdentifier
-							|| targetFrameworkIdentifier is WasmTargetFrameworkIdentifier or DesktopTargetFrameworkIdentifier or Windows10TargetFrameworkIdentifier)
+						&& (
+							(
+								// 17.12 or later properly supports having their TFM anywhere in the
+								// TFMs lists, except Wasm.
+								GetVisualStudioReleaseVersion() >= new Version(17, 12)
+								&& (
+									previousTargetFrameworkIdentifier is WasmTargetFrameworkIdentifier
+									|| targetFrameworkIdentifier is WasmTargetFrameworkIdentifier))
+
+							|| (
+								// 17.11 or earlier needs reloading most TFMs
+								GetVisualStudioReleaseVersion() < new Version(17, 12)
+								&& (previousTargetFrameworkIdentifier is WasmTargetFrameworkIdentifier or DesktopTargetFrameworkIdentifier or Windows10TargetFrameworkIdentifier
+									|| targetFrameworkIdentifier is WasmTargetFrameworkIdentifier or DesktopTargetFrameworkIdentifier or Windows10TargetFrameworkIdentifier))
+						)
 					)
 				)
 			)
@@ -261,6 +290,11 @@ public partial class EntryPoint : IDisposable
 					}
 				}
 			}
+			else
+			{
+				// No need to reload, but we still need to update the selected target framework
+				await WriteProjectUserSettingsAsync(newFramework);
+			}
 		}
 		catch (Exception e)
 		{
@@ -287,7 +321,13 @@ public partial class EntryPoint : IDisposable
 
 	private async Task OnStartupProjectChangedAsync()
 	{
-		if (!await EnsureProjectUserSettingsAsync())
+		if (_dte.Solution.SolutionBuild.StartupProjects is null)
+		{
+			// The user unloaded all projects, we need to reset the state
+			_isFirstProfileTfmChange = true;
+		}
+
+		if (!await EnsureProjectUserSettingsAsync() && _debuggerObserver is not null)
 		{
 			_debugAction?.Invoke($"The user setting is not yet initialized, aligning framework and profile");
 
@@ -314,7 +354,8 @@ public partial class EntryPoint : IDisposable
 	private async Task<bool> EnsureProjectUserSettingsAsync()
 	{
 		if (await _asyncPackage.GetServiceAsync(typeof(SVsSolution)) is IVsSolution solution
-			&& await _dte.GetStartupProjectsAsync() is { Length: > 0 } startupProjects)
+			&& await _dte.GetStartupProjectsAsync() is { Length: > 0 } startupProjects
+			&& _debuggerObserver is not null)
 		{
 			// Convert DTE project to IVsHierarchy
 			solution.GetProjectOfUniqueName(startupProjects[0].UniqueName, out var hierarchy);

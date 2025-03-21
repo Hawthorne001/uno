@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -19,6 +20,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Uno.Diagnostics.UI;
+using Uno.Threading;
+using static Uno.UI.RemoteControl.HotReload.MetadataUpdater.ElementUpdateAgent;
 
 #if HAS_UNO_WINUI
 using _WindowActivatedEventArgs = Microsoft.UI.Xaml.WindowActivatedEventArgs;
@@ -30,7 +33,7 @@ namespace Uno.UI.RemoteControl.HotReload;
 
 partial class ClientHotReloadProcessor
 {
-	private static int _isWaitingForTypeMapping;
+	private static readonly AsyncLock _uiUpdateGate = new(); // We can use the simple AsyncLock here as we don't need reentrancy.
 
 	private static ElementUpdateAgent? _elementAgent;
 
@@ -51,23 +54,12 @@ partial class ClientHotReloadProcessor
 		}
 	}
 
-	private static async Task<(bool value, string reason)> ShouldReload()
+	private static (bool value, string reason) ShouldReload()
 	{
-		if (Interlocked.CompareExchange(ref _isWaitingForTypeMapping, 1, 0) == 1)
-		{
-			return (false, "another reload is already waiting for type mapping to resume");
-		}
-		try
-		{
-			var shouldReload = await TypeMappings.WaitForResume();
-			return shouldReload
-				? (true, string.Empty)
-				: (false, "type mapping prevent reload");
-		}
-		finally
-		{
-			Interlocked.Exchange(ref _isWaitingForTypeMapping, 0);
-		}
+		var isPaused = TypeMappings.IsPaused;
+		return isPaused
+			? (false, "type mapping prevent reload")
+			: (true, string.Empty);
 	}
 
 	internal static void SetWindow(Window window, bool disableIndicator)
@@ -105,6 +97,8 @@ partial class ClientHotReloadProcessor
 	/// </summary>
 	private static async Task ReloadWithUpdatedTypes(HotReloadClientOperation? hrOp, Window window, Type[] updatedTypes)
 	{
+		using var sequentialUiUpdateLock = await _uiUpdateGate.LockAsync(default);
+
 		var handlerActions = ElementAgent?.ElementHandlerActions;
 
 		var uiUpdating = true;
@@ -112,7 +106,7 @@ partial class ClientHotReloadProcessor
 		{
 			hrOp?.SetCurrent();
 
-			if (await ShouldReload() is { value: false } prevent)
+			if (ShouldReload() is { value: false } prevent)
 			{
 				uiUpdating = false;
 				hrOp?.ReportIgnored(prevent.reason);
@@ -127,73 +121,104 @@ partial class ClientHotReloadProcessor
 
 			var capturedStates = new Dictionary<string, Dictionary<string, object>>();
 
+			static int GetSubClassDepth(Type? type, Type baseType)
+			{
+				var count = 0;
+				if (type == baseType)
+				{
+					return 0;
+				}
+				for (; type != null; type = type.BaseType)
+				{
+					count++;
+					if (type == baseType)
+					{
+						return count;
+					}
+				}
+				return -1;
+			}
+
 			var isCapturingState = true;
 			var treeIterator = EnumerateHotReloadInstances(
-					window.Content,
-					async (fe, key) =>
+				window.Content,
+				async (fe, key) =>
+				{
+					// Get the original type of the element, in case it's been replaced
+					var liveType = fe.GetType();
+					var originalType = liveType.GetOriginalType() ?? fe.GetType();
+
+					// Get the handler for the type specified
+					// Since we're only interested in handlers for specific element types
+					// we exclude those registered for "object". Handlers that want to run
+					// for all element types should register for FrameworkElement instead
+					ImmutableArray<ElementUpdateHandlerActions> handlers =
+					[
+						..from handler in handlerActions
+						let depth = GetSubClassDepth(originalType, handler.Key)
+						where depth is not -1 && handler.Key != typeof(object)
+						orderby depth descending
+						select handler.Value
+					];
+
+					// Get the replacement type, or null if not replaced
+					var mappedType = originalType.GetMappedType();
+					foreach (var handler in handlers)
 					{
-						// Get the original type of the element, in case it's been replaced
-						var liveType = fe.GetType();
-						var originalType = liveType.GetOriginalType() ?? fe.GetType();
-
-						// Get the handler for the type specified
-						// Since we're only interested in handlers for specific element types
-						// we exclude those registered for "object". Handlers that want to run
-						// for all element types should register for FrameworkElement instead
-						var handler = (from h in handlerActions
-									   where (originalType == h.Key ||
-											originalType.IsSubclassOf(h.Key)) &&
-											h.Key != typeof(object)
-									   select h.Value).FirstOrDefault();
-
-						// Get the replacement type, or null if not replaced
-						var mappedType = originalType.GetMappedType();
-
-						if (handler is not null)
+						if (!capturedStates.TryGetValue(key, out var dict))
 						{
-							if (!capturedStates.TryGetValue(key, out var dict))
-							{
-								dict = new();
-							}
-							if (isCapturingState)
-							{
-								handler.CaptureState(fe, dict, updatedTypes);
-								if (dict.Any())
-								{
-									capturedStates[key] = dict;
-								}
-							}
-							else
-							{
-								await handler.RestoreState(fe, dict, updatedTypes);
-							}
+							dict = new();
 						}
 
-						if (updatedTypes.Contains(liveType))
+						if (isCapturingState)
 						{
-							// This may happen if one of the nested types has been hot reloaded, but not the type itself.
-							// For instance, a DataTemplate in a resource dictionary may mark the type as updated in `updatedTypes`
-							// but it will not be considered as a new type even if "CreateNewOnMetadataUpdate" was set.
-
-							return (fe, null, liveType);
+							handler.CaptureState(fe, dict, updatedTypes);
+							if (dict.Any())
+							{
+								capturedStates[key] = dict;
+							}
 						}
 						else
 						{
-							return (handler is not null || mappedType is not null) ? (fe, handler, mappedType) : default;
+							await handler.RestoreState(fe, dict, updatedTypes);
 						}
-					},
-					parentKey: default);
+					}
+
+					if (updatedTypes.Contains(liveType))
+					{
+						// This may happen if one of the nested types has been hot reloaded, but not the type itself.
+						// For instance, a DataTemplate in a resource dictionary may mark the type as updated in `updatedTypes`
+						// but it will not be considered as a new type even if "CreateNewOnMetadataUpdate" was set.
+
+						return (fe, [], liveType);
+					}
+					else
+					{
+						return (!handlers.IsDefaultOrEmpty || mappedType is not null)
+							? (fe, handlers, mappedType)
+							: (null, [], null);
+					}
+				},
+				parentKey: default);
 
 			// Forced iteration to capture all state before doing ui update
 			var instancesToUpdate = await treeIterator.ToArrayAsync();
 
 			// Iterate through the visual tree and either invoke ElementUpdate, 
 			// or replace the element with a new one
-			foreach (var (element, elementHandler, elementMappedType) in instancesToUpdate)
+			foreach (var (element, elementHandlers, elementMappedType) in instancesToUpdate)
 			{
+				if (element is null)
+				{
+					continue;
+				}
+
 				// Action: ElementUpdate
 				// This is invoked for each existing element that is in the tree that needs to be replaced
-				elementHandler?.ElementUpdate(element, updatedTypes);
+				foreach (var elementHandler in elementHandlers)
+				{
+					elementHandler?.ElementUpdate(element, updatedTypes);
+				}
 
 				if (elementMappedType is not null)
 				{
@@ -202,7 +227,7 @@ partial class ClientHotReloadProcessor
 						_log.Error($"Updating element [{element}] to [{elementMappedType}]");
 					}
 
-					ReplaceViewInstance(element, elementMappedType, elementHandler);
+					ReplaceViewInstance(element, elementMappedType, elementHandlers, updatedTypes);
 				}
 			}
 
@@ -388,7 +413,7 @@ partial class ClientHotReloadProcessor
 	}
 #endif
 
-	private static void ReplaceViewInstance(UIElement instance, Type replacementType, ElementUpdateAgent.ElementUpdateHandlerActions? handler = default, Type[]? updatedTypes = default)
+	private static void ReplaceViewInstance(UIElement instance, Type replacementType, in ImmutableArray<ElementUpdateHandlerActions> handlers, Type[] updatedTypes)
 	{
 		if (replacementType.GetConstructor(Array.Empty<Type>()) is { } creator)
 		{
@@ -409,11 +434,17 @@ partial class ClientHotReloadProcessor
 				oldStore.ClonePropertiesToAnotherStoreForHotReload(newStore);
 #endif
 
-				handler?.BeforeElementReplaced(instanceFE, newInstanceFE, updatedTypes);
+				foreach (var handler in handlers)
+				{
+					handler.BeforeElementReplaced(instanceFE, newInstanceFE, updatedTypes);
+				}
 
 				SwapViews(instanceFE, newInstanceFE);
 
-				handler?.AfterElementReplaced(instanceFE, newInstanceFE, updatedTypes);
+				foreach (var handler in handlers)
+				{
+					handler.AfterElementReplaced(instanceFE, newInstanceFE, updatedTypes);
+				}
 			}
 		}
 		else
@@ -507,7 +538,7 @@ partial class ClientHotReloadProcessor
 #endif
 		else
 		{
-			var errorMsg = $"Unable to access Dispatcher/DispatcherQueue in order to invoke {nameof(ReloadWithUpdatedTypes)}. Make sure you have enabled hot-reload (Window.EnableHotReload()) in app startup. See https://aka.platform.uno/hot-reload";
+			var errorMsg = $"Unable to access Dispatcher/DispatcherQueue in order to invoke {nameof(ReloadWithUpdatedTypes)}. Make sure you have enabled hot-reload (Window.UseStudio()) in app startup. See https://aka.platform.uno/hot-reload";
 			hr?.ReportError(new InvalidOperationException(errorMsg));
 			if (_log.IsEnabled(LogLevel.Warning))
 			{

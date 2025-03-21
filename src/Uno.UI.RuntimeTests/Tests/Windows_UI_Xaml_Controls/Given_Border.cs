@@ -109,7 +109,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 				//Assert.AreEqual(new Vector3((float)expectedOffsetDimension, (float)expectedOffsetDimension, 0), customControl.ActualOffset);
 
 				Assert.AreEqual(expectedSizeInner, customControl.DesiredSize);
-				Assert.AreEqual(null, customControl.Clip);
+				Assert.IsNull(customControl.Clip);
 			}
 
 			// TODO: This assert currently fails.
@@ -119,7 +119,57 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			Assert.AreEqual(new Size(innerDimension, innerDimension), innerBorder.RenderSize);
 			Assert.AreEqual(new Vector2((float)innerDimension, (float)innerDimension), innerBorder.ActualSize);
 			Assert.AreEqual(expectedSizeInner, innerBorder.DesiredSize);
-			Assert.AreEqual(null, innerBorder.Clip);
+			Assert.IsNull(innerBorder.Clip);
+		}
+
+		[TestMethod]
+#if !HAS_RENDER_TARGET_BITMAP
+		[Ignore("Cannot take screenshot on this platform.")]
+#endif
+		public async Task When_Non_Empty_Null_Border()
+		{
+			static Border CreateBorder(Color color)
+			{
+				return new Border()
+				{
+					Width = 40,
+					Height = 40,
+					Background = new SolidColorBrush(color),
+				};
+			}
+			var container = new StackPanel() { Spacing = 10 };
+			var transparentParent = CreateBorder(Colors.Green);
+			var transparentBorder = CreateBorder(Colors.Red);
+			transparentBorder.BorderBrush = new SolidColorBrush(Colors.Transparent);
+			transparentBorder.BorderThickness = new Thickness(4);
+			transparentParent.Child = transparentBorder;
+
+			var nullParent = CreateBorder(Colors.Green);
+			var nullBorder = CreateBorder(Colors.Red);
+			nullBorder.BorderBrush = null;
+			nullBorder.BorderThickness = new Thickness(4);
+			nullParent.Child = nullBorder;
+
+			var noParent = CreateBorder(Colors.Green);
+			var noBorder = CreateBorder(Colors.Red);
+			noBorder.BorderThickness = new Thickness(0);
+			noParent.Child = noBorder;
+
+			container.Children.Add(transparentParent);
+			container.Children.Add(nullParent);
+			container.Children.Add(noParent);
+
+			WindowHelper.WindowContent = container;
+			await WindowHelper.WaitForLoaded(container);
+
+			// screenshot of nullBorder should be the same of transparentBorder
+			var transparentBorderScreenshot = await UITestHelper.ScreenShot(transparentParent);
+			var nullBorderScreenshot = await UITestHelper.ScreenShot(nullParent);
+			await ImageAssert.AreEqualAsync(transparentBorderScreenshot, nullBorderScreenshot);
+
+			// screenshot of noBorder should be different
+			var noBorderScreenshot = await UITestHelper.ScreenShot(noParent);
+			await ImageAssert.AreNotEqualAsync(nullBorderScreenshot, noBorderScreenshot);
 		}
 
 		[TestMethod]
@@ -630,10 +680,9 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 #if HAS_UNO
 #if !HAS_INPUT_INJECTOR
 		[Ignore("InputInjector is not supported on this platform.")]
-#else
+#endif
 		[TestMethod]
 		[RunsOnUIThread]
-#endif
 		public async Task Nested_Element_Tapped()
 		{
 			var SUT = new Border()
@@ -669,10 +718,9 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 #if !HAS_INPUT_INJECTOR
 		[Ignore("InputInjector is not supported on this platform.")]
-#else
+#endif
 		[TestMethod]
 		[RunsOnUIThread]
-#endif
 		public async Task Parent_DoubleTapped_When_Child_Has_Tapped()
 		{
 			var SUT = new Border()

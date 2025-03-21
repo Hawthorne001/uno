@@ -33,7 +33,63 @@ public partial class RemoteControlClient : IRemoteControlClient
 	public delegate void RemoteControlClientEventEventHandler(object sender, ClientEventEventArgs args);
 	public delegate void SendMessageFailedEventHandler(object sender, SendMessageFailedEventArgs args);
 
-	public static RemoteControlClient? Instance { get; private set; }
+	public static RemoteControlClient? Instance
+	{
+		get => _instance;
+		private set
+		{
+			_instance = value;
+
+			if (value is { })
+			{
+				while (Interlocked.Exchange(ref _waitingList, null) is { } waitingList)
+				{
+					foreach (var action in waitingList)
+					{
+						action(value);
+					}
+				}
+			}
+		}
+	}
+
+	private static IReadOnlyCollection<Action<RemoteControlClient>>? _waitingList;
+
+	/// <summary>
+	/// Add a callback to be called when the Instance is available.
+	/// </summary>
+	/// <remarks>
+	/// Will be called synchronously if the instance is already available, no need to check for it before.
+	/// </remarks>
+	public static void OnRemoteControlClientAvailable(Action<RemoteControlClient> action)
+	{
+		if (Instance is { })
+		{
+			action(Instance);
+		}
+		else
+		{
+			// Thread-safe way to add the action to a waiting list for the client to be available
+			while (true)
+			{
+				var waitingList = _waitingList;
+				IReadOnlyCollection<Action<RemoteControlClient>> newList = waitingList is null
+					? [action]
+					: [.. waitingList, action];
+
+				if (Instance is { } i) // Last chance to avoid the waiting list
+				{
+					action(i);
+					break;
+				}
+
+				if (ReferenceEquals(Interlocked.CompareExchange(ref _waitingList, newList, waitingList), waitingList))
+				{
+					break;
+				}
+			}
+		}
+	}
 
 	public static RemoteControlClient Initialize(Type appType)
 		=> Instance = new RemoteControlClient(appType);
@@ -59,6 +115,7 @@ public partial class RemoteControlClient : IRemoteControlClient
 
 	private readonly StatusSink _status;
 	private static readonly TimeSpan _keepAliveInterval = TimeSpan.FromSeconds(30);
+	private static RemoteControlClient? _instance;
 	private readonly (string endpoint, int port)[]? _serverAddresses;
 	private readonly Dictionary<string, IClientProcessor> _processors = new();
 	private readonly List<IRemoteControlPreProcessor> _preprocessors = new();
@@ -100,6 +157,7 @@ public partial class RemoteControlClient : IRemoteControlClient
 	{
 		AppType = appType;
 		_status = new StatusSink(this);
+		var error = default(ConnectionError?);
 
 		// Environment variables are the first priority as they are used by runtime tests engine to test hot-reload.
 		// They should be considered as the default values and in any case they must take precedence over the assembly-provided values.
@@ -112,7 +170,7 @@ public partial class RemoteControlClient : IRemoteControlClient
 
 		// Get the addresses from the assembly attributes set by the code-gen in debug (i.e. from the IDE)
 		if (_serverAddresses is null or { Length: 0 }
-			&& appType.Assembly.GetCustomAttributes(typeof(ServerEndpointAttribute), false) is ServerEndpointAttribute[] embeddedEndpoints)
+			&& appType.Assembly.GetCustomAttributes(typeof(ServerEndpointAttribute), false) is ServerEndpointAttribute[] { Length: > 0 } embeddedEndpoints)
 		{
 			IEnumerable<(string endpoint, int port)> GetAddresses()
 			{
@@ -120,7 +178,7 @@ public partial class RemoteControlClient : IRemoteControlClient
 				{
 					if (endpoint.Port is 0 && !Uri.TryCreate(endpoint.Endpoint, UriKind.Absolute, out _))
 					{
-						this.Log().LogError($"Failed to get remote control server port from the IDE for endpoint {endpoint.Endpoint}.");
+						this.Log().LogInfo($"Failed to get dev-server port from the IDE for endpoint {endpoint.Endpoint}.");
 					}
 					else
 					{
@@ -130,6 +188,14 @@ public partial class RemoteControlClient : IRemoteControlClient
 			}
 
 			_serverAddresses = GetAddresses().ToArray();
+			if (_serverAddresses is { Length: 0 })
+			{
+				error = ConnectionError.EndpointWithoutPort;
+				this.Log().LogError(
+					"Some endpoint for uno's dev-server has been configured in your application, but all are invalid (port is missing?). "
+					+ "This can usually be fixed with a **rebuild** of your application. "
+					+ "If not, make sure you have the latest version of the uno's extensions installed in your IDE and restart your IDE.");
+			}
 		}
 
 		if (_serverAddresses is null or { Length: 0 })
@@ -146,10 +212,16 @@ public partial class RemoteControlClient : IRemoteControlClient
 
 		if (_serverAddresses is null or { Length: 0 })
 		{
-			this.Log().LogError("Failed to get any remote control server endpoint from the IDE.");
+			if (error is null)
+			{
+				error = ConnectionError.NoEndpoint;
+				this.Log().LogError(
+					"Failed to get any valid dev-server endpoint from the IDE."
+					+ "Make sure you have the latest version of the uno's extensions installed in your IDE and restart your IDE.");
+			}
 
 			_connection = Task.FromResult<Connection?>(null);
-			_status.Report(ConnectionState.NoServer);
+			_status.Report(ConnectionState.NoServer, error);
 			return;
 		}
 
@@ -222,7 +294,6 @@ public partial class RemoteControlClient : IRemoteControlClient
 #endif
 
 			_status.Report(ConnectionState.Connecting);
-
 
 			const string lastEndpointKey = "__UNO__" + nameof(RemoteControlClient) + "__last_endpoint";
 			var preferred = ApplicationData.Current.LocalSettings.Values.TryGetValue(lastEndpointKey, out var lastValue) && lastValue is string lastEp
@@ -429,7 +500,8 @@ public partial class RemoteControlClient : IRemoteControlClient
 		{
 			if (this.Log().IsEnabled(LogLevel.Trace))
 			{
-				this.Log().Trace($"Connecting to [{serverUri}] failed: {e.Message}");
+				var innerMessage = e.InnerException is { } ie ? $" ({ie.Message})" : "";
+				this.Log().Trace($"Connecting to [{serverUri}] failed: {e.Message}{innerMessage}");
 			}
 
 			return new(this, serverUri, watch, null);
@@ -442,77 +514,106 @@ public partial class RemoteControlClient : IRemoteControlClient
 
 		foreach (var processor in _processors)
 		{
-			await processor.Value.Initialize();
+			try
+			{
+				await processor.Value.Initialize();
+			}
+			catch (Exception error)
+			{
+				if (this.Log().IsEnabled(LogLevel.Error))
+				{
+					this.Log().LogError($"Failed to initialize processor '{processor}'.", error);
+				}
+			}
 		}
 
 		StartKeepAliveTimer();
 
 		while (await WebSocketHelper.ReadFrame(socket, ct) is HotReload.Messages.Frame frame)
 		{
-			if (frame.Scope == WellKnownScopes.DevServerChannel)
+			try
 			{
-				if (frame.Name == KeepAliveMessage.Name)
+				if (frame.Scope == WellKnownScopes.DevServerChannel)
 				{
-					ProcessPong(frame);
-				}
-				else if (frame.Name == ProcessorsDiscoveryResponse.Name)
-				{
-					ProcessServerProcessorsDiscovered(frame);
-				}
-			}
-			else
-			{
-				if (_processors.TryGetValue(frame.Scope, out var processor))
-				{
-					if (this.Log().IsEnabled(LogLevel.Trace))
+					if (frame.Name == KeepAliveMessage.Name)
 					{
-						this.Log().Trace($"Received frame [{frame.Scope}/{frame.Name}]");
+						ProcessPong(frame);
 					}
-
-					bool skipProcessing = false;
-
-					foreach (var preProcessor in _preprocessors)
+					else if (frame.Name == ProcessorsDiscoveryResponse.Name)
 					{
-						if (await preProcessor.SkipProcessingFrame(frame))
-						{
-							skipProcessing = true;
-							break;
-						}
-					}
-
-					if (!skipProcessing)
-					{
-						try
-						{
-							await processor.ProcessFrame(frame);
-						}
-						catch (Exception e)
-						{
-							if (this.Log().IsEnabled(LogLevel.Error))
-							{
-								this.Log().LogError($"Error while processing frame [{frame.Scope}/{frame.Name}]", e);
-							}
-						}
+						ProcessServerProcessorsDiscovered(frame);
 					}
 				}
 				else
 				{
-					if (this.Log().IsEnabled(LogLevel.Error))
+					if (_processors.TryGetValue(frame.Scope, out var processor))
 					{
-						this.Log().LogError($"Unknown Frame scope {frame.Scope}");
+						if (this.Log().IsEnabled(LogLevel.Trace))
+						{
+							this.Log().Trace($"Received frame [{frame.Scope}/{frame.Name}]");
+						}
+
+						var skipProcessing = false;
+						foreach (var preProcessor in _preprocessors)
+						{
+							try
+							{
+								if (await preProcessor.SkipProcessingFrame(frame))
+								{
+									skipProcessing = true;
+									break;
+								}
+							}
+							catch (Exception error)
+							{
+								if (this.Log().IsEnabled(LogLevel.Error))
+								{
+									this.Log().LogError($"Error while **PRE**processing frame [{frame.Scope}/{frame.Name}] be pre-processor {preProcessor}", error);
+								}
+							}
+						}
+
+						if (!skipProcessing)
+						{
+							try
+							{
+								await processor.ProcessFrame(frame);
+							}
+							catch (Exception e)
+							{
+								if (this.Log().IsEnabled(LogLevel.Error))
+								{
+									this.Log().LogError($"Error while processing frame [{frame.Scope}/{frame.Name}] by processor {processor}", e);
+								}
+							}
+						}
+					}
+					else
+					{
+						if (this.Log().IsEnabled(LogLevel.Trace))
+						{
+							this.Log().Trace($"Unknown Frame scope {frame.Scope}");
+						}
 					}
 				}
-			}
 
-			try
-			{
-				FrameReceived?.Invoke(this, new ReceivedFrameEventArgs(frame));
+				try
+				{
+					FrameReceived?.Invoke(this, new ReceivedFrameEventArgs(frame));
+				}
+				catch (Exception error)
+				{
+					if (this.Log().IsEnabled(LogLevel.Error))
+					{
+						this.Log().LogError($"Error while notifying frame received {frame.Scope}/{frame.Name}", error);
+					}
+				}
 			}
 			catch (Exception error)
 			{
 				if (this.Log().IsEnabled(LogLevel.Error))
 				{
-					this.Log().LogError($"Error while notifying frame received {frame.Scope}/{frame.Name}", error);
+					this.Log().LogError($"Error while processing frame {frame.Scope}/{frame.Name}", error);
 				}
 			}
 		}
@@ -599,7 +700,7 @@ public partial class RemoteControlClient : IRemoteControlClient
 
 		if (Interlocked.CompareExchange(ref _keepAliveTimer, timer, null) is null)
 		{
-			timer.Change(_keepAliveInterval, _keepAliveInterval);
+			timer.Change(TimeSpan.Zero, _keepAliveInterval);
 		}
 	}
 

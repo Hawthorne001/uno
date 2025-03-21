@@ -499,7 +499,11 @@ namespace Microsoft.UI.Xaml.Documents
 					var segment = segmentSpan.Segment;
 					var inline = segment.Inline;
 					var fontInfo = segment.FallbackFont ?? inline.FontInfo;
-					var paint = inline.Paint;
+
+					using var paintDisposable = SkiaHelper.GetTempSKPaint(out var paint);
+					paint.TextEncoding = SKTextEncoding.Utf16;
+					paint.IsStroke = false;
+					paint.IsAntialias = true;
 
 					if (inline.Foreground is SolidColorBrush scb)
 					{
@@ -509,6 +513,24 @@ namespace Microsoft.UI.Xaml.Documents
 							green: scbColor.G,
 							blue: scbColor.B,
 							alpha: (byte)(scbColor.A * scb.Opacity * session.Filters.Opacity));
+					}
+					else if (inline.Foreground is GradientBrush gb)
+					{
+						var gbColor = gb.FallbackColorWithOpacity;
+						paint.Color = new SKColor(
+							red: gbColor.R,
+							green: gbColor.G,
+							blue: gbColor.B,
+							alpha: (byte)(gbColor.A * session.Filters.Opacity));
+					}
+					else if (inline.Foreground is XamlCompositionBrushBase xcbb)
+					{
+						var gbColor = xcbb.FallbackColorWithOpacity;
+						paint.Color = new SKColor(
+							red: gbColor.R,
+							green: gbColor.G,
+							blue: gbColor.B,
+							alpha: (byte)(gbColor.A * session.Filters.Opacity));
 					}
 
 					// TODO: Consider using a stackalloc for small values of GlyphsLength.
@@ -871,7 +893,12 @@ namespace Microsoft.UI.Xaml.Documents
 				characterCount++;
 			}
 
-			if (ignoreEndingSpace && span == line.SegmentSpans[^1] && span.GlyphsStart + span.GlyphsLength > 0 && char.IsWhiteSpace(segment.Text[span.GlyphsStart + span.GlyphsLength - 1]))
+			if (ignoreEndingSpace
+				&& span == line.SegmentSpans[^1]
+				&& line != _renderLines[^1]
+				&& ((IBlock)_collection.GetParent()).TextWrapping != TextWrapping.NoWrap
+				&& span.GlyphsStart + span.GlyphsLength > 0
+				&& char.IsWhiteSpace(segment.Text[span.GlyphsStart + span.GlyphsLength - 1]))
 			{
 				// in cases like clicking at the end of a line that ends in a wrapping space, we actually want the character right before the space
 				characterCount--;

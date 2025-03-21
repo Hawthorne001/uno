@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml.Media;
 using Uno.UI.DataBinding;
 using Uno.Foundation.Logging;
 using Microsoft.UI.Xaml.Input;
+using Uno.Helpers;
 using Uno.UI.Xaml.Core;
 
 #if __IOS__
@@ -121,25 +122,6 @@ internal partial class PopupPanel : Panel
 		}
 		else if (Popup.CustomLayouter == null)
 		{
-			// TODO: For now, the layouting logic for managed DatePickerFlyout or TimePickerFlyout does not correctly work
-			// against the placement target approach.
-			var isFlyoutManagedDatePicker =
-				(Popup.AssociatedFlyout is DatePickerFlyout || Popup.AssociatedFlyout is TimePickerFlyout)
-#if __ANDROID__ || __IOS__
-				&& (Popup.AssociatedFlyout is not NativeDatePickerFlyout && Popup.AssociatedFlyout is not NativeTimePickerFlyout)
-#endif
-				;
-
-			if (!isFlyoutManagedDatePicker &&
-				Popup.PlacementTarget is not null
-#if __ANDROID__ || __IOS__
-				|| NativeAnchor is not null
-#endif
-				)
-			{
-				return PlacementArrangeOverride(Popup, finalSize);
-			}
-
 			// Gets the location of the popup (or its Anchor) in the VisualTree, so we will align Top/Left with it
 			// Note: we do not prevent overflow of the popup on any side as UWP does not!
 			//		 (And actually it also lets the view appear out of the window ...)
@@ -175,8 +157,32 @@ internal partial class PopupPanel : Panel
 				size.Width,
 				size.Height);
 
+			// TODO: For now, the layouting logic for managed DatePickerFlyout or TimePickerFlyout does not correctly work
+			// against the placement target approach.
+			var isFlyoutManagedDatePicker =
+					(Popup.AssociatedFlyout is DatePickerFlyout || Popup.AssociatedFlyout is TimePickerFlyout)
+#if __ANDROID__ || __IOS__
+				&& (Popup.AssociatedFlyout is not NativeDatePickerFlyout && Popup.AssociatedFlyout is not NativeTimePickerFlyout)
+#endif
+				;
+
+			if ((!isFlyoutManagedDatePicker
+#if __ANDROID__ || __IOS__
+				 || NativeAnchor is not null
+#endif
+				 || !MathHelpers.DoesRectContainRect(GetVisibleBounds(), finalFrame) // if the finalFrame spills out of the window, always use PlacementArrangeOverride
+				) && Popup.PlacementTarget is not null
+			   )
+			{
+				return PlacementArrangeOverride(Popup, finalSize);
+			}
+
 			ArrangeElement(child, finalFrame);
 
+			// Temporary workaround to avoid layout cycle on iOS. This block was added specifically for a bug on Android's
+			// MenuFlyout so, for now, we restrict to to only Android
+			// This can be re-evaluated and removed after https://github.com/unoplatform/uno/pull/18261 merges
+#if !__IOS__
 			var updatedFinalFrame = new Rect(
 				anchorLocation.X + (float)Popup.HorizontalOffset,
 				anchorLocation.Y + (float)Popup.VerticalOffset,
@@ -193,6 +199,7 @@ internal partial class PopupPanel : Panel
 				// See MenuFlyoutSubItem_Placement sample.
 				ArrangeElement(child, updatedFinalFrame);
 			}
+#endif
 
 			if (this.Log().IsEnabled(LogLevel.Debug))
 			{
@@ -226,9 +233,6 @@ internal partial class PopupPanel : Panel
 	private protected override void OnLoaded()
 	{
 		base.OnLoaded();
-		// Set Parent to the Popup, to obtain the same behavior as UWP that the Popup (and therefore the rest of the main visual tree)
-		// is reachable by scaling the combined Parent/GetVisualParent() hierarchy.
-		this.SetLogicalParent(Popup);
 
 		this.XamlRoot.Changed += XamlRootChanged;
 	}
@@ -236,7 +240,6 @@ internal partial class PopupPanel : Panel
 	private protected override void OnUnloaded()
 	{
 		base.OnUnloaded();
-		this.SetLogicalParent(null);
 
 		if (XamlRoot is { } xamlRoot)
 		{
@@ -255,7 +258,7 @@ internal partial class PopupPanel : Panel
 			// Instead of handling it here, CommandBar should handle it using an LTE (look at the comment
 			// in AppBar.SetupOverlayState) but we don't have the logic implemented in Uno yet, so we
 			// rely on this workaround to close CommandBar's popup.
-			if (popup.TemplatedParent is CommandBar cb)
+			if (popup.GetTemplatedParent() is CommandBar cb)
 			{
 				cb.TryDismissInlineAppBarInternal();
 			}
@@ -289,7 +292,7 @@ internal partial class PopupPanel : Panel
 		// Instead of handling it here, CommandBar should handle it using an LTE (look at the comment
 		// in AppBar.SetupOverlayState) but we don't have the logic implemented in Uno yet, so we
 		// rely on this workaround to close CommandBar's popup.
-		if (Popup is { TemplatedParent: CommandBar { IsSticky: false } })
+		if (Popup?.GetTemplatedParent() is CommandBar { IsSticky: false })
 		{
 			return true;
 		}

@@ -26,9 +26,8 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 {
 	partial class ServerHotReloadProcessor : IServerProcessor, IDisposable
 	{
-		private FileSystemWatcher[]? _watchers;
-		private CompositeDisposable? _watcherEventsDisposable;
-		private IRemoteControlServer _remoteControlServer;
+		private static readonly TimeSpan _waitForIdeResultTimeout = TimeSpan.FromSeconds(25);
+		private readonly IRemoteControlServer _remoteControlServer;
 
 		public ServerHotReloadProcessor(IRemoteControlServer remoteControlServer)
 		{
@@ -37,8 +36,19 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 
 		public string Scope => WellKnownScopes.HotReload;
 
+		private bool _isRunningInsideVisualStudio;
+
+		private void InterpretMsbuildProperties(IDictionary<string, string> properties)
+		{
+			// This is called from ProcessConfigureServer() during initialization.
+
+			_isRunningInsideVisualStudio = properties
+				.TryGetValue("BuildingInsideVisualStudio", out var vs) && vs.Equals("true", StringComparison.OrdinalIgnoreCase);
+		}
+
 		public async Task ProcessFrame(Frame frame)
 		{
+			// Messages received from the CLIENT application
 			switch (frame.Name)
 			{
 				case ConfigureServer.Name:
@@ -56,14 +66,13 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 		/// <inheritdoc />
 		public async Task ProcessIdeMessage(IdeMessage message, CancellationToken ct)
 		{
+			// Messages received from the IDE
 			switch (message)
 			{
-				case HotReloadRequestedIdeMessage hrRequested:
-					// Note: For now the IDE will notify the ProcessingFiles only in case of force hot reload request sent by client!
-					await Notify(HotReloadEvent.ProcessingFiles, HotReloadEventSource.IDE);
-					if (_pendingHotReloadRequestToIde.TryGetValue(hrRequested.RequestId, out var request))
+				case IdeResultMessage resultMessage:
+					if (_pendingRequestsToIde.TryGetValue(resultMessage.IdeCorrelationId, out var tcs))
 					{
-						request.TrySetResult(hrRequested.Result);
+						tcs.TrySetResult(resultMessage.Result);
 					}
 					break;
 
@@ -206,6 +215,10 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 		/// </summary>
 		private class HotReloadServerOperation
 		{
+			public readonly static int DefaultAutoRetryIfNoChangesAttempts = 3;
+
+			public readonly static TimeSpan DefaultAutoRetryIfNoChangesDelay = TimeSpan.FromMilliseconds(500);
+
 			// Delay to wait without any update to consider operation was aborted.
 			private static readonly TimeSpan _timeoutDelay = TimeSpan.FromSeconds(30);
 
@@ -219,6 +232,11 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 			private ImmutableHashSet<string> _filePaths;
 			private int /* HotReloadResult */ _result = -1;
 			private CancellationTokenSource? _deferredCompletion;
+
+			// In VS we forcefully request to VS to hot-reload application, but in some cases the changes are not detected by VS and it returns a NoChanges result.
+			// In such cases we can retry the hot-reload request to VS to let it process the file updates.
+			private int _noChangesRetry;
+			private TimeSpan _noChangesRetryDelay = DefaultAutoRetryIfNoChangesDelay;
 
 			public long Id { get; } = Interlocked.Increment(ref _count);
 
@@ -291,6 +309,15 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 			}
 
 			/// <summary>
+			/// Configure a simple auto-retry strategy if no changes are detected.
+			/// </summary>
+			public void EnableAutoRetryIfNoChanges(int? attempts, TimeSpan? delay)
+			{
+				_noChangesRetry = attempts ?? DefaultAutoRetryIfNoChangesAttempts;
+				_noChangesRetryDelay = delay ?? DefaultAutoRetryIfNoChangesDelay;
+			}
+
+			/// <summary>
 			/// As errors might get a bit after the complete from the IDE, we can defer the completion of the operation.
 			/// </summary>
 			public async ValueTask DeferComplete(HotReloadServerResult result, Exception? exception = null)
@@ -313,6 +340,21 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 
 			private async ValueTask Complete(HotReloadServerResult result, Exception? exception, bool isFromNext)
 			{
+				if (_result is -1
+					&& result is HotReloadServerResult.NoChanges
+					&& Interlocked.Decrement(ref _noChangesRetry) >= 0)
+				{
+					if (_noChangesRetryDelay is { TotalMilliseconds: > 0 })
+					{
+						await Task.Delay(_noChangesRetryDelay);
+					}
+
+					if (await _owner.RequestHotReloadToIde())
+					{
+						return;
+					}
+				}
+
 				Debug.Assert(result != HotReloadServerResult.InternalError || exception is not null); // For internal error we should always provide an exception!
 
 				// Remove this from current
@@ -364,73 +406,60 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 			if (this.Log().IsEnabled(LogLevel.Debug))
 			{
 				this.Log().LogDebug($"Base project path: {configureServer.ProjectPath}");
-				this.Log().LogDebug($"Xaml Search Paths: {string.Join(", ", configureServer.XamlPaths)}");
 			}
 
-			if (!InitializeMetadataUpdater(configureServer))
+			var properties = configureServer
+				.MSBuildProperties
+				.ToDictionary();
+
+			InterpretMsbuildProperties(properties);
+
+			if (InitializeMetadataUpdater(configureServer, properties))
 			{
-				// We are relying on IDE (or XAML only), we won't have any other hot-reload initialization steps.
+				this.Log().LogDebug($"Metadata updater initialized");
+			}
+			else
+			{
+				// We are relying on IDE, we won't have any other hot-reload initialization steps.
 				_ = Notify(HotReloadEvent.Ready);
+				this.Log().LogDebug("Metadata updater **NOT** initialized.");
 			}
+		}
+		#endregion
 
-			_watchers = configureServer.XamlPaths
-				.Select(p => new FileSystemWatcher
-				{
-					Path = p,
-					Filter = "*.*",
-					NotifyFilter = NotifyFilters.LastWrite |
-						NotifyFilters.Attributes |
-						NotifyFilters.Size |
-						NotifyFilters.CreationTime |
-						NotifyFilters.FileName,
-					EnableRaisingEvents = true,
-					IncludeSubdirectories = false
-				})
-				.ToArray();
+		#region SendAndWaitForResult
+		private readonly ConcurrentDictionary<long, TaskCompletionSource<Result>> _pendingRequestsToIde = new();
 
-			_watcherEventsDisposable = new CompositeDisposable();
+		private long _lasIdeCorrelationId;
 
-			foreach (var watcher in _watchers)
+		private long GetNextIdeCorrelationId() => Interlocked.Increment(ref _lasIdeCorrelationId);
+
+		private async Task<Result> SendAndWaitForResult<TMessage>(TMessage message)
+			where TMessage : IdeMessageWithCorrelationId
+		{
+			var tcs = new TaskCompletionSource<Result>();
+			try
 			{
-				var disposable = ToObservable(watcher).Subscribe(
-					filePaths =>
-					{
-						var files = filePaths
-							.Distinct()
-							.Where(f =>
-								Path.GetExtension(f).Equals(".xaml", StringComparison.OrdinalIgnoreCase)
-								|| Path.GetExtension(f).Equals(".cs", StringComparison.OrdinalIgnoreCase));
+				using var cts = new CancellationTokenSource(_waitForIdeResultTimeout);
+				await using var ctReg = cts.Token.Register(() => tcs.TrySetCanceled());
 
-						foreach (var file in files)
-						{
-							OnSourceFileChanged(file);
-						}
-					},
-					e => Console.WriteLine($"Error {e}"));
+				_pendingRequestsToIde.TryAdd(message.CorrelationId, tcs);
+				await _remoteControlServer.SendMessageToIDEAsync(message);
 
-				_watcherEventsDisposable.Add(disposable);
+				return await tcs.Task;
 			}
-
-			void OnSourceFileChanged(string fullPath)
-				=> Task.Run(async () =>
-				{
-					if (this.Log().IsEnabled(LogLevel.Debug))
-					{
-						this.Log().LogDebug($"File {fullPath} changed");
-					}
-
-					await _remoteControlServer.SendFrame(
-						new FileReload
-						{
-							Content = File.ReadAllText(fullPath),
-							FilePath = fullPath
-						});
-				});
+			catch (Exception ex)
+			{
+				return Result.Fail(ex);
+			}
+			finally
+			{
+				_pendingRequestsToIde.TryRemove(message.CorrelationId, out _);
+			}
 		}
 		#endregion
 
 		#region UpdateFile
-		private readonly ConcurrentDictionary<long, TaskCompletionSource<Result>> _pendingHotReloadRequestToIde = new();
 
 		private async Task ProcessUpdateFile(UpdateFile message)
 		{
@@ -438,32 +467,55 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 
 			try
 			{
-				var (result, error) = DoUpdateFile();
-				if ((int)result < 300 && !message.IsForceHotReloadDisabled)
+				var (result, error) = message switch
 				{
-					await RequestHotReloadToIde(hotReload.Id);
+					{ FilePath: null or { Length: 0 } } => (FileUpdateResult.BadRequest, "Invalid request (file path is empty)"),
+					{ OldText: not null, NewText: not null } => await (_isRunningInsideVisualStudio
+						? DoRemoteUpdateInIde(message.NewText)
+						: DoUpdateOnDisk(message.OldText, message.NewText)),
+					{ OldText: null, NewText: not null } => await (_isRunningInsideVisualStudio
+						? DoRemoteUpdateInIde(message.NewText)
+						: DoWriteToDisk(message.NewText)),
+					{ NewText: null, IsCreateDeleteAllowed: true } => await DoDeleteFromDisk(),
+					_ => (FileUpdateResult.BadRequest, "Invalid request")
+				};
+
+				var isIdeSupportingHotReload = _isRunningInsideVisualStudio;
+
+				if (message.IsForceHotReloadDisabled is false && (int)result < 300)
+				{
+					hotReload.EnableAutoRetryIfNoChanges(message.ForceHotReloadAttempts, message.ForceHotReloadDelay);
+
+					if (isIdeSupportingHotReload)
+					{
+						await RequestHotReloadToIde();
+					}
 				}
 
-				await _remoteControlServer.SendFrame(new UpdateFileResponse(message.RequestId, message.FilePath, result, error, hotReload.Id));
+				await _remoteControlServer.SendFrame(new UpdateFileResponse(message.RequestId, message.FilePath ?? "", result, error, hotReload.Id));
 			}
 			catch (Exception ex)
 			{
 				await hotReload.Complete(HotReloadServerResult.InternalError, ex);
-				await _remoteControlServer.SendFrame(new UpdateFileResponse(message.RequestId, message.FilePath, FileUpdateResult.Failed, ex.Message));
+				await _remoteControlServer.SendFrame(new UpdateFileResponse(message.RequestId, message.FilePath ?? "", FileUpdateResult.Failed, ex.Message));
 			}
 
-			(FileUpdateResult, string?) DoUpdateFile()
+			async Task<(FileUpdateResult, string?)> DoRemoteUpdateInIde(string newText)
 			{
-				if (message?.IsValid() is not true)
-				{
-					if (this.Log().IsEnabled(LogLevel.Debug))
-					{
-						this.Log().LogDebug($"Got an invalid update file frame ({message}) [{message?.RequestId}].");
-					}
+				var saveToDisk = message.ForceSaveOnDisk ?? true; // Temporary set to true until this issue is fixed: https://github.com/unoplatform/uno.hotdesign/issues/3454
 
-					return (FileUpdateResult.BadRequest, "Invalid request");
-				}
+				// Right now, when running on VS, we're delegating the file update to the code that is running inside VS.
+				// we're not doing this for other file operations because they are not/less required for hot-reload. We may need to revisit this eventually.
+				var ideMsg = new UpdateFileIdeMessage(GetNextIdeCorrelationId(), message.FilePath, newText, saveToDisk);
+				var result = await SendAndWaitForResult(ideMsg);
 
+				return result.IsSuccess
+					? (FileUpdateResult.Success, null)
+					: (FileUpdateResult.Failed, result.Error);
+			}
+
+			async Task<(FileUpdateResult, string?)> DoUpdateOnDisk(string oldText, string newText)
+			{
 				if (!File.Exists(message.FilePath))
 				{
 					if (this.Log().IsEnabled(LogLevel.Debug))
@@ -474,21 +526,16 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 					return (FileUpdateResult.FileNotFound, $"Requested file '{message.FilePath}' does not exists.");
 				}
 
-				if (this.Log().IsEnabled(LogLevel.Debug))
-				{
-					this.Log().LogDebug($"Apply Changes to {message.FilePath} [{message.RequestId}].");
-				}
-
-				var originalContent = File.ReadAllText(message.FilePath);
+				var originalContent = await File.ReadAllTextAsync(message.FilePath);
 				if (this.Log().IsEnabled(LogLevel.Trace))
 				{
-					this.Log().LogTrace($"Original content: {message.FilePath} [{message.RequestId}].");
+					this.Log().LogTrace($"Original content: {originalContent} [{message.RequestId}].");
 				}
 
-				var updatedContent = originalContent.Replace(message.OldText, message.NewText);
+				var updatedContent = originalContent.Replace(oldText, newText);
 				if (this.Log().IsEnabled(LogLevel.Trace))
 				{
-					this.Log().LogTrace($"Updated content: {message.FilePath} [{message.RequestId}].");
+					this.Log().LogTrace($"Updated content: {updatedContent} [{message.RequestId}].");
 				}
 
 				if (updatedContent == originalContent)
@@ -501,48 +548,107 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 					return (FileUpdateResult.NoChanges, null);
 				}
 
-				File.WriteAllText(message.FilePath, updatedContent);
+				var effectiveUpdate = WaitForFileUpdated();
+				await File.WriteAllTextAsync(message.FilePath, updatedContent);
+				await effectiveUpdate;
+
 				return (FileUpdateResult.Success, null);
+			}
+
+			async Task<(FileUpdateResult, string?)> DoWriteToDisk(string newText)
+			{
+				if (!message.IsCreateDeleteAllowed && !File.Exists(message.FilePath))
+				{
+					if (this.Log().IsEnabled(LogLevel.Debug))
+					{
+						this.Log().LogDebug($"Requested file '{message.FilePath}' does not exists [{message.RequestId}].");
+					}
+
+					return (FileUpdateResult.FileNotFound, $"Requested file '{message.FilePath}' does not exists.");
+				}
+
+				if (this.Log().IsEnabled(LogLevel.Trace))
+				{
+					this.Log().LogTrace($"Write content: {newText} [{message.RequestId}].");
+				}
+
+				var effectiveUpdate = WaitForFileUpdated();
+				await File.WriteAllTextAsync(message.FilePath, newText);
+				await effectiveUpdate;
+
+				return (FileUpdateResult.Success, null);
+			}
+
+			async ValueTask<(FileUpdateResult, string?)> DoDeleteFromDisk()
+			{
+				if (!File.Exists(message.FilePath))
+				{
+					if (this.Log().IsEnabled(LogLevel.Debug))
+					{
+						this.Log().LogDebug($"Requested file '{message.FilePath}' does not exists [{message.RequestId}].");
+					}
+
+					return (FileUpdateResult.FileNotFound, $"Requested file '{message.FilePath}' does not exists.");
+				}
+
+				var effectiveUpdate = WaitForFileUpdated();
+				File.Delete(message.FilePath);
+				await effectiveUpdate;
+
+				return (FileUpdateResult.Success, null);
+			}
+
+			async Task WaitForFileUpdated()
+			{
+				var file = new FileInfo(message.FilePath);
+				var dir = file.Directory;
+				while (dir is { Exists: false })
+				{
+					dir = dir.Parent;
+				}
+
+				if (dir is null)
+				{
+					return;
+				}
+
+				var tcs = new TaskCompletionSource();
+				using var watcher = new FileSystemWatcher(dir.FullName);
+				watcher.Changed += async (snd, e) =>
+				{
+					if (e.FullPath.Equals(file.FullName, StringComparison.OrdinalIgnoreCase))
+					{
+						if ((message.ForceHotReloadDelay ?? HotReloadServerOperation.DefaultAutoRetryIfNoChangesDelay) is { TotalMilliseconds: > 0 } delay)
+						{
+							await Task.Delay(delay);
+						}
+
+						tcs.TrySetResult();
+					}
+				};
+				watcher.EnableRaisingEvents = true;
+
+				if (await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(5))) != tcs.Task
+					&& this.Log().IsEnabled(LogLevel.Debug))
+				{
+					this.Log().LogDebug($"File update event not received for '{message.FilePath}', continuing anyway [{message.RequestId}].");
+				}
 			}
 		}
 
-		private async Task<bool> RequestHotReloadToIde(long sequenceId)
+		private async Task<bool> RequestHotReloadToIde()
 		{
-			var hrRequest = new ForceHotReloadIdeMessage(sequenceId);
-			var hrRequested = new TaskCompletionSource<Result>();
+			var result = await SendAndWaitForResult(new ForceHotReloadIdeMessage(GetNextIdeCorrelationId()));
 
-			try
-			{
-				using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-				await using var ctReg = cts.Token.Register(() => hrRequested.TrySetCanceled());
+			// Note: For now the IDE will notify the ProcessingFiles only in case of force hot reload request sent by client!
+			await Notify(HotReloadEvent.ProcessingFiles, HotReloadEventSource.IDE);
 
-				await _remoteControlServer.SendMessageToIDEAsync(hrRequest);
-
-				return await hrRequested.Task is { IsSuccess: true };
-			}
-			catch (Exception)
-			{
-				return false;
-			}
-			finally
-			{
-				_pendingHotReloadRequestToIde.TryRemove(hrRequest.CorrelationId, out _);
-			}
+			return result.IsSuccess;
 		}
 		#endregion
 
 		public void Dispose()
 		{
-			_watcherEventsDisposable?.Dispose();
-
-			if (_watchers != null)
-			{
-				foreach (var watcher in _watchers)
-				{
-					watcher.Dispose();
-				}
-			}
-
 			_solutionWatcherEventsDisposable?.Dispose();
 			if (_solutionWatchers != null)
 			{
@@ -556,39 +662,6 @@ namespace Uno.UI.RemoteControl.Host.HotReload
 		}
 
 		#region Helpers
-		private static IObservable<IList<string>> ToObservable(params FileSystemWatcher[] watchers)
-			=> Observable.Defer(() =>
-			{
-				// Create an observable instead of using the FromEventPattern which
-				// does not register to events properly.
-				// Renames are required for the WriteTemporary->DeleteOriginal->RenameToOriginal that
-				// Visual Studio uses to save files.
-
-				var subject = new Subject<string>();
-
-				void changed(object s, FileSystemEventArgs args) => subject.OnNext(args.FullPath);
-				void renamed(object s, RenamedEventArgs args) => subject.OnNext(args.FullPath);
-
-				foreach (var watcher in watchers)
-				{
-					watcher.Changed += changed;
-					watcher.Created += changed;
-					watcher.Renamed += renamed;
-				}
-
-				return subject
-					.Buffer(() => subject.Throttle(TimeSpan.FromMilliseconds(250))) // Wait for 250 ms without any file change
-					.Finally(() =>
-					{
-						foreach (var watcher in watchers)
-						{
-							watcher.Changed -= changed;
-							watcher.Created -= changed;
-							watcher.Renamed -= renamed;
-						}
-					});
-			});
-
 		private static IObservable<Task<ImmutableHashSet<string>>> To2StepsObservable(FileSystemWatcher[] watchers, Predicate<string> filter)
 			=> Observable.Create<Task<ImmutableHashSet<string>>>(o =>
 			{

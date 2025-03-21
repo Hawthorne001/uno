@@ -36,6 +36,11 @@ jobs:
   - checkout: self
     clean: true
 
+  # Install android 34 as we're running on macos-15
+  - bash: |
+      echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --install 'platforms;android-34' | tr '\r' '\n' | uniq
+    displayName: Install Android 34
+
   - template: templates/dotnet-mobile-install-mac.yml
 
   - template: templates/nuget-cache.yml
@@ -72,6 +77,8 @@ jobs:
   - Android_Build_NetCoreMobile_For_Tests
 
   timeoutInMinutes: 45
+  cancelTimeoutInMinutes: 1
+
   variables:
     CI_Build: true
     SourceLinkEnabled: false
@@ -178,6 +185,8 @@ jobs:
 
   ## First tests run (https://github.com/unoplatform/uno/issues/6714)
   - bash: |
+      # always set execute bit, as git has a tendency to remove it
+      chmod +x $(build.sourcesdirectory)/build/test-scripts/android-uitest-run.sh
       $(build.sourcesdirectory)/build/test-scripts/android-uitest-run.sh
 
     displayName: Run Android Tests

@@ -2,9 +2,11 @@
 using Uno.UI;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Automation.Peers;
+using Microsoft.UI.Xaml.Data;
 
 namespace Microsoft.UI.Xaml.Automation
 {
+	[Bindable]
 	public sealed partial class AutomationProperties
 	{
 		#region Name
@@ -41,7 +43,7 @@ namespace Microsoft.UI.Xaml.Automation
 			return (AccessibilityView)element.GetValue(AccessibilityViewProperty);
 		}
 
-		public static void SetAccessibilityeView(DependencyObject element, AccessibilityView value)
+		public static void SetAccessibilityView(DependencyObject element, AccessibilityView value)
 		{
 			element.SetValue(AccessibilityViewProperty, value);
 		}

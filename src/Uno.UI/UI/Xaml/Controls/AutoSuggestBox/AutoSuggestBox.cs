@@ -35,6 +35,7 @@ namespace Microsoft.UI.Xaml.Controls
 		private string _userInput;
 		private FrameworkElement _suggestionsContainer;
 		private IDisposable _textChangedDisposable;
+		private IDisposable _textBoxLoadedDisposable;
 
 		public AutoSuggestBox() : base()
 		{
@@ -52,7 +53,12 @@ namespace Microsoft.UI.Xaml.Controls
 			_layoutRoot = GetTemplateChild("LayoutRoot") as Grid;
 			_suggestionsList = GetTemplateChild("SuggestionsList") as ListView;
 			_suggestionsContainer = GetTemplateChild("SuggestionsContainer") as FrameworkElement;
-			_queryButton = GetTemplateChild("QueryButton") as Button;
+
+			// This is *expected* to be null on platforms with proper lifecycle.
+			// The queryButton is part of the TextBox template, which is not applied yet.
+			// On WinUI, QueryButton is never retrieved in OnTextBoxLoaded, not in OnApplyTemplate.
+			// We do in both to account for all our platforms.
+			_queryButton = _textBox?.GetTemplateChild("QueryButton") as Button;
 
 			// Uno specific: If the user enabled the legacy behavior for popup light dismiss default
 			// we force it to false explicitly to make sure the AutoSuggestBox works correctly.
@@ -72,16 +78,10 @@ namespace Microsoft.UI.Xaml.Controls
 			}
 #endif
 
-			UpdateQueryButton();
 			UpdateTextBox();
 			UpdateDescriptionVisibility(true);
 
-			_textChangedDisposable?.Dispose();
-			if (_textBox is { })
-			{
-				_textBox.TextChanged += OnTextBoxTextChanged;
-				_textChangedDisposable = Disposable.Create(() => _textBox.TextChanged -= OnTextBoxTextChanged);
-			}
+			RegisterTextEvents();
 
 			Loaded += (s, e) => RegisterEvents();
 			Unloaded += (s, e) => UnregisterEvents();
@@ -89,6 +89,26 @@ namespace Microsoft.UI.Xaml.Controls
 			if (IsLoaded)
 			{
 				RegisterEvents();
+			}
+		}
+
+		private void RegisterTextEvents()
+		{
+			_textChangedDisposable?.Dispose();
+			_textBoxLoadedDisposable?.Dispose();
+			if (_textBox is { })
+			{
+				_textBox.TextChanged += OnTextBoxTextChanged;
+				_textChangedDisposable = Disposable.Create(() => _textBox.TextChanged -= OnTextBoxTextChanged);
+
+
+				_textBox.Loaded += OnTextBoxLoaded;
+				_textBoxLoadedDisposable = Disposable.Create(() => _textBox.Loaded -= OnTextBoxLoaded);
+
+				if (_textBox.IsLoaded)
+				{
+					UpdateQueryButton();
+				}
 			}
 		}
 
@@ -101,6 +121,11 @@ namespace Microsoft.UI.Xaml.Controls
 			}
 			Text = _textBox.Text;
 			OnTextChanged(args.IsUserModifyingText);
+		}
+
+		private void OnTextBoxLoaded(object sender, RoutedEventArgs args)
+		{
+			UpdateQueryButton();
 		}
 
 		private void OnItemsChanged(IObservableVector<object> sender, IVectorChangedEventArgs @event)
@@ -154,6 +179,11 @@ namespace Microsoft.UI.Xaml.Controls
 					IsSuggestionListOpen = true;
 					_suggestionsList.ItemsSource = GetItems();
 				}
+
+				// We need to layout the popup again after the list changes to account for the
+				// changed height and/or width when the popup is above or to the left of the
+				// ASB respectively.
+				LayoutPopup();
 			}
 		}
 
@@ -273,6 +303,7 @@ namespace Microsoft.UI.Xaml.Controls
 			if (_textBox != null)
 			{
 				_textBox.KeyDown += OnTextBoxKeyDown;
+				_queryButton = _textBox.GetTemplateChild<Button>("QueryButton");
 			}
 
 			if (_queryButton != null)
@@ -292,12 +323,15 @@ namespace Microsoft.UI.Xaml.Controls
 				_popup.Opened += OnPopupOpened;
 			}
 
+			RegisterTextEvents();
+
 			SizeChanged += OnSizeChanged;
 		}
 
 		void UnregisterEvents()
 		{
 			_textChangedDisposable?.Dispose();
+			_textBoxLoadedDisposable?.Dispose();
 			if (_textBox != null)
 			{
 				_textBox.KeyDown -= OnTextBoxKeyDown;
@@ -358,6 +392,7 @@ namespace Microsoft.UI.Xaml.Controls
 
 		private void UpdateQueryButton()
 		{
+			_queryButton = _textBox?.GetTemplateChild<Button>("QueryButton");
 			if (_queryButton == null)
 			{
 				return;

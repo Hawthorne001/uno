@@ -564,7 +564,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			await TestServices.WindowHelper.WaitForIdle();
 
 
-			Assert.AreEqual(list.SelectedIndex, 0);
+			Assert.AreEqual(0, list.SelectedIndex);
 			Assert.AreEqual(list.SelectedItem, child1);
 		}
 
@@ -610,6 +610,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			Assert.AreEqual(list.SelectedItems[1], child3);
 		}
 
+		[TestMethod]
 		public async Task NoItemSelectedMultiple()
 		{
 			var child1 = new ListViewItem
@@ -644,7 +645,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			await TestServices.WindowHelper.WaitForIdle();
 
 
-			Assert.AreEqual(list.SelectedItems.Count, 0);
+			Assert.AreEqual(0, list.SelectedItems.Count);
 		}
 
 		[TestMethod]
@@ -683,7 +684,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			await TestServices.WindowHelper.WaitForIdle();
 
 
-			Assert.AreEqual(list.SelectedIndex, -1);
+			Assert.AreEqual(-1, list.SelectedIndex);
 		}
 
 		[TestMethod]
@@ -903,8 +904,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			async Task AssertSelected()
 			{
 				await WindowHelper.WaitForIdle();
-				selected.ForEach(item => Assert.AreEqual(item.IsSelected, true));
-				items.Except(selected).ForEach(item => Assert.AreEqual(item.IsSelected, false));
+				selected.ForEach(item => Assert.IsTrue(item.IsSelected));
+				items.Except(selected).ForEach(item => Assert.IsFalse(item.IsSelected));
 			}
 		}
 #endif
@@ -941,12 +942,12 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			selected.AddRange(items.Where((_, i) => i is > 1 and <= 3).ToList());
 			await AssertSelected();
 
-			KeyboardHelper.Down(list);
-			KeyboardHelper.Down(list);
+			await KeyboardHelper.Down(list);
+			await KeyboardHelper.Down(list);
 
 			await AssertSelected();
 
-			KeyboardHelper.Space(list);
+			await KeyboardHelper.Space(list);
 			list.SafeRaiseEvent(UIElement.KeyDownEvent, new KeyRoutedEventArgs(list, VirtualKey.Down, VirtualKeyModifiers.Shift));
 			list.SafeRaiseEvent(UIElement.KeyDownEvent, new KeyRoutedEventArgs(list, VirtualKey.Down, VirtualKeyModifiers.Shift));
 			list.SafeRaiseEvent(UIElement.KeyDownEvent, new KeyRoutedEventArgs(list, VirtualKey.Down, VirtualKeyModifiers.Shift));
@@ -954,7 +955,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			selected.AddRange(items.Where((_, i) => i is >= 5 and <= 8).ToList());
 			await AssertSelected();
 
-			KeyboardHelper.Down(list);
+			await KeyboardHelper.Down(list);
 			list.SafeRaiseEvent(UIElement.KeyDownEvent, new KeyRoutedEventArgs(list, VirtualKey.Up, VirtualKeyModifiers.Shift));
 			list.SafeRaiseEvent(UIElement.KeyDownEvent, new KeyRoutedEventArgs(list, VirtualKey.Up, VirtualKeyModifiers.Shift));
 
@@ -964,8 +965,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			async Task AssertSelected()
 			{
 				await WindowHelper.WaitForIdle();
-				selected.ForEach(item => Assert.AreEqual(item.IsSelected, true));
-				items.Except(selected).ForEach(item => Assert.AreEqual(item.IsSelected, false));
+				selected.ForEach(item => Assert.IsTrue(item.IsSelected));
+				items.Except(selected).ForEach(item => Assert.IsFalse(item.IsSelected));
 			}
 		}
 #endif
@@ -1045,8 +1046,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			async Task AssertSelected()
 			{
 				await WindowHelper.WaitForIdle();
-				selected.ForEach(item => Assert.AreEqual(item.IsSelected, true));
-				items.Except(selected).ForEach(item => Assert.AreEqual(item.IsSelected, false));
+				selected.ForEach(item => Assert.IsTrue(item.IsSelected));
+				items.Except(selected).ForEach(item => Assert.IsFalse(item.IsSelected));
 			}
 		}
 #endif
@@ -1083,13 +1084,13 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			selected.AddRange(items.Where((_, i) => i is > 1 and <= 3).ToList());
 			await AssertSelected();
 
-			KeyboardHelper.Down(list);
+			await KeyboardHelper.Down(list);
 
 			items.Where((_, i) => i is >= 1 and <= 3).ForEach(item => selected.Remove(item));
 			selected.Add(items[4]);
 			await AssertSelected();
 
-			KeyboardHelper.Down(list);
+			await KeyboardHelper.Down(list);
 
 			selected.Remove(items[4]);
 			selected.Add(items[5]);
@@ -1123,8 +1124,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			async Task AssertSelected()
 			{
 				await WindowHelper.WaitForIdle();
-				selected.ForEach(item => Assert.AreEqual(item.IsSelected, true));
-				items.Except(selected).ForEach(item => Assert.AreEqual(item.IsSelected, false));
+				selected.ForEach(item => Assert.IsTrue(item.IsSelected));
+				items.Except(selected).ForEach(item => Assert.IsFalse(item.IsSelected));
 			}
 		}
 #endif
@@ -1175,8 +1176,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			async Task AssertSelected()
 			{
 				await WindowHelper.WaitForIdle();
-				selected.ForEach(item => Assert.AreEqual(item.IsSelected, true));
-				items.Except(selected).ForEach(item => Assert.AreEqual(item.IsSelected, false));
+				selected.ForEach(item => Assert.IsTrue(item.IsSelected));
+				items.Except(selected).ForEach(item => Assert.IsFalse(item.IsSelected));
 			}
 		}
 #endif
@@ -1233,8 +1234,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			async Task AssertSelected()
 			{
 				await WindowHelper.WaitForIdle();
-				selected.ForEach(item => Assert.AreEqual(item.IsSelected, true));
-				items.Except(selected).ForEach(item => Assert.AreEqual(item.IsSelected, false));
+				selected.ForEach(item => Assert.IsTrue(item.IsSelected));
+				items.Except(selected).ForEach(item => Assert.IsFalse(item.IsSelected));
 			}
 		}
 #endif
@@ -1273,13 +1274,13 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 			Assert.AreEqual(1, SUT.SelectedIndex);
 
-			KeyboardHelper.Right();
-			KeyboardHelper.Right();
+			await KeyboardHelper.Right();
+			await KeyboardHelper.Right();
 			await WindowHelper.WaitForIdle();
 
 			Assert.AreEqual(3, SUT.SelectedIndex);
 
-			KeyboardHelper.Left();
+			await KeyboardHelper.Left();
 			await WindowHelper.WaitForIdle();
 
 			Assert.AreEqual(2, SUT.SelectedIndex);
@@ -1315,7 +1316,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			lvi1.Focus(FocusState.Programmatic);
 			await WindowHelper.WaitForIdle();
 
-			KeyboardHelper.Space();
+			await KeyboardHelper.Space();
 			await WindowHelper.WaitForIdle();
 
 			Assert.IsTrue(lvi1.IsSelected);
@@ -1325,7 +1326,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 			SUT.SelectedIndex = -1;
 
-			KeyboardHelper.Enter();
+			await KeyboardHelper.Enter();
 			await WindowHelper.WaitForIdle();
 
 			Assert.IsTrue(handled);
@@ -1436,8 +1437,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			SUT.ItemsSource = source;
 			SUT.SelectedValuePath = "Key";
 
-			Assert.AreEqual(null, SUT.SelectedValue);
-			Assert.AreEqual(null, SUT.SelectedItem);
+			Assert.IsNull(SUT.SelectedValue);
+			Assert.IsNull(SUT.SelectedItem);
 			Assert.AreEqual(-1, SUT.SelectedIndex);
 
 			SUT.SelectedValue = 1;
@@ -1450,8 +1451,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			// Set invalid
 			SUT.SelectedValue = 4;
 
-			Assert.AreEqual(null, SUT.SelectedValue);
-			Assert.AreEqual(null, SUT.SelectedItem);
+			Assert.IsNull(SUT.SelectedValue);
+			Assert.IsNull(SUT.SelectedItem);
 			Assert.AreEqual(-1, SUT.SelectedIndex);
 		}
 
@@ -1467,8 +1468,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			};
 			SUT.ItemsSource = source;
 
-			Assert.AreEqual(null, SUT.SelectedValue);
-			Assert.AreEqual(null, SUT.SelectedItem);
+			Assert.IsNull(SUT.SelectedValue);
+			Assert.IsNull(SUT.SelectedItem);
 			Assert.AreEqual(-1, SUT.SelectedIndex);
 
 			SUT.SelectedValue = "Two";
@@ -1479,8 +1480,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 			SUT.SelectedValue = "Eleventy";
 
-			Assert.AreEqual(null, SUT.SelectedValue);
-			Assert.AreEqual(null, SUT.SelectedItem);
+			Assert.IsNull(SUT.SelectedValue);
+			Assert.IsNull(SUT.SelectedItem);
 			Assert.AreEqual(-1, SUT.SelectedIndex);
 		}
 
@@ -1621,6 +1622,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 		[RunsOnUIThread]
 #if __IOS__ || __ANDROID__
 		[Ignore("Disabled because of animated scrolling, even when explicitly requested.")]
+#elif __WASM__
+		[Ignore("Flaky in CI.")]
 #endif
 		public async Task When_Large_List_Scroll_To_End_Then_Back_Up_And_First_Item()
 		{
@@ -1988,11 +1991,13 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			// since this is originally a virtualization issue and references
 			// could be to different things than those shown on the screen.
 			var si = await UITestHelper.ScreenShot(list, true);
-			ImageAssert.HasColorAt(si, 70, 65, Colors.FromARGB("#1A69A6")); // selected
+			// on macOS/metal we get the color #1A6AA7 which is quite close but not identical
+			var tolerance = (byte)(OperatingSystem.IsMacOS() ? 1 : 0);
+			ImageAssert.HasColorAt(si, 70, 65, Colors.FromARGB("#1A69A6"), tolerance); // selected
 
 			// check starting from below the second item that nothing looks selected or hovered
-			ImageAssert.DoesNotHaveColorInRectangle(si, new Rectangle(100, 110, si.Width - 100, si.Height - 110), Colors.FromARGB("#1A69A6")); // selected
-			ImageAssert.DoesNotHaveColorInRectangle(si, new Rectangle(100, 110, si.Width - 100, si.Height - 110), Colors.FromARGB("#FFE6E6E6")); // hovered
+			ImageAssert.DoesNotHaveColorInRectangle(si, new Rectangle(100, 110, si.Width - 100, si.Height - 110), Colors.FromARGB("#1A69A6"), tolerance); // selected
+			ImageAssert.DoesNotHaveColorInRectangle(si, new Rectangle(100, 110, si.Width - 100, si.Height - 110), Colors.FromARGB("#FFE6E6E6"), tolerance); // hovered
 		}
 
 		[TestMethod]
@@ -2066,12 +2071,12 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 			Assert.AreEqual(0, sv.VerticalOffset);
 
-			KeyboardHelper.Down();
+			await KeyboardHelper.Down();
 			await WindowHelper.WaitForIdle();
 
 			Assert.AreEqual(0, sv.VerticalOffset);
 
-			KeyboardHelper.Down();
+			await KeyboardHelper.Down();
 			await WindowHelper.WaitForIdle();
 
 			sv.VerticalOffset.Should().BeApproximately(lvi.ActualHeight * 3 - 120, 2);
@@ -2238,35 +2243,52 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 			var scroll = list.FindFirstDescendant<ScrollViewer>();
 			Assert.IsNotNull(scroll);
-			dataContextChanged.Should().BeLessThan(10, $"dataContextChanged {dataContextChanged}");
 
-			ScrollTo(list, ElementHeight);
+			int expectedMaterialized = 0, expectedDCChanged = 0;
+			int[] previouslyMaterializedItems = [];
+			async Task ScrollAndValidate(string context, double? scrollTo)
+			{
+				if (scrollTo is { } voffset)
+				{
+					ScrollTo(list, voffset);
+				}
+				await WindowHelper.WaitForIdle();
 
-			await WindowHelper.WaitForIdle();
+#if HAS_UNO && !(__IOS__ || __ANDROID__)
+				var evpScaling = (list.ItemsPanelRoot as IVirtualizingPanel).GetLayouter().CacheLength * VirtualizingPanelLayout.ExtendedViewportScaling;
+#else
+				var evpScaling = 0.5;
+#endif
 
-			materialized.Should().BeLessThan(12, $"materialized {materialized}");
-			dataContextChanged.Should().BeLessThan(11, $"dataContextChanged {dataContextChanged}");
+				var offset = scroll.VerticalOffset;
+				var max = scroll.ExtentHeight;
+				var vp = scroll.ViewportHeight;
 
-			ScrollTo(list, ElementHeight * 3);
+				var evpStart = Math.Clamp(offset - vp * evpScaling, 0, max);
+				var evpEnd = Math.Clamp(offset + vp + vp * evpScaling, 0, max);
 
-			await WindowHelper.WaitForIdle();
+				var firstIndex = (int)Math.Round(evpStart / ElementHeight, 0, MidpointRounding.ToNegativeInfinity);
+				var lastIndex = (int)Math.Round(evpEnd / ElementHeight, 0, MidpointRounding.ToPositiveInfinity) - 1;
+				var itemsInEVP = Enumerable.Range(firstIndex, lastIndex - firstIndex + 1).ToArray();
+				var newItemsInEVP = itemsInEVP.Except(previouslyMaterializedItems).ToArray();
 
-			materialized.Should().BeLessThan(14, $"materialized {materialized}");
-			dataContextChanged.Should().BeLessThan(13, $"dataContextChanged {dataContextChanged}");
+				// materialized starts with +1 extra, since we use it to determine whether the DataTemplate itself is a self-container
+				// Math.Max to count the historical highest, since "materialization" doesnt "unhappen" (we dont count tear-down).
+				expectedMaterialized = Math.Max(expectedMaterialized, 1 + itemsInEVP.Length);
+				// dc-changed counts the total items prepared and "re-entrancy"(out of effective-viewport and back in).
+				// we just need to add the new items since last time
+				expectedDCChanged += newItemsInEVP.Length;
+				previouslyMaterializedItems = itemsInEVP;
 
-			ScrollTo(list, scroll.ExtentHeight / 2); // Scroll to middle
+				materialized.Should().BeLessOrEqualTo(expectedMaterialized, $"[{context}] materialized {materialized}");
+				dataContextChanged.Should().BeLessOrEqualTo(expectedDCChanged, $"[{context}] dataContextChanged {dataContextChanged}");
+			}
 
-			await WindowHelper.WaitForIdle();
-
-			materialized.Should().BeLessThan(14, $"materialized {materialized}");
-			dataContextChanged.Should().BeLessThan(25, $"dataContextChanged {dataContextChanged}");
-
-			ScrollTo(list, scroll.ExtentHeight / 4); // Scroll to Quarter
-
-			await WindowHelper.WaitForIdle();
-
-			materialized.Should().BeLessThan(14, $"materialized {materialized}");
-			dataContextChanged.Should().BeLessThan(35, $"dataContextChanged {dataContextChanged}");
+			await ScrollAndValidate("initial state", null);
+			await ScrollAndValidate("scrolled past element#0", ElementHeight);
+			await ScrollAndValidate("scrolled past element#2", ElementHeight * 3);
+			await ScrollAndValidate("scrolled to 1/2", scroll.ExtentHeight / 2);
+			await ScrollAndValidate("scrolled back to 1/4", scroll.ExtentHeight / 4);
 		}
 #endif
 
@@ -2428,7 +2450,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 				Assert.AreEqual(0, list.IndexFromContainer(items[0]));
 
 				// Test removed container/index/item
-				Assert.AreEqual(null, list.ContainerFromItem(removedItem));
+				Assert.IsNull(list.ContainerFromItem(removedItem));
 				// In UWP, the Item is returned even though it is already removed
 				// This is a weird behavior and doesn't seem too useful anyway, so we currently
 				// ignore it
@@ -2543,8 +2565,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 				Assert.AreEqual(0, list.IndexFromContainer(items[0]));
 
 				// Test old container/index/item
-				Assert.AreEqual(null, list.ContainerFromItem(oldItem));
-				Assert.AreEqual(null, list.ItemFromContainer(oldItem));
+				Assert.IsNull(list.ContainerFromItem(oldItem));
+				Assert.IsNull(list.ItemFromContainer(oldItem));
 				Assert.AreEqual(-1, list.IndexFromContainer(oldItem));
 
 				// Test new container/index/item
@@ -2601,8 +2623,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 				using var _ = new AssertionScope();
 
 				// Test container/index/item from old source
-				Assert.AreEqual(null, list.ContainerFromItem(items[1]));
-				Assert.AreEqual(null, list.ItemFromContainer(items[1]));
+				Assert.IsNull(list.ContainerFromItem(items[1]));
+				Assert.IsNull(list.ItemFromContainer(items[1]));
 				Assert.AreEqual(-1, list.IndexFromContainer(items[1]));
 
 				// Test container/index/item from new source
@@ -2684,7 +2706,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 				Assert.AreEqual(0, list.IndexFromContainer(container0));
 
 				// Test removed container/index/item
-				Assert.AreEqual(null, list.ContainerFromItem(removedItem));
+				Assert.IsNull(list.ContainerFromItem(removedItem));
 
 				// Test container/index/item right after removed
 				var container1 = (ListViewItem)list.ContainerFromItem(items[1]);
@@ -2804,8 +2826,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 				Assert.AreEqual(0, list.IndexFromContainer(container0));
 
 				// Test old container/index/item
-				Assert.AreEqual(null, list.ContainerFromItem(oldItem));
-				Assert.AreEqual(null, list.ItemFromContainer(oldContainer));
+				Assert.IsNull(list.ContainerFromItem(oldItem));
+				Assert.IsNull(list.ItemFromContainer(oldContainer));
 				Assert.AreEqual(-1, list.IndexFromContainer(oldContainer));
 
 #if HAS_UNO
@@ -2874,8 +2896,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 				using var _ = new AssertionScope();
 
 				// Test container/index/item from old source
-				Assert.AreEqual(null, list.ContainerFromItem(oldItem));
-				Assert.AreEqual(null, list.ItemFromContainer(oldContainer));
+				Assert.IsNull(list.ContainerFromItem(oldItem));
+				Assert.IsNull(list.ItemFromContainer(oldContainer));
 				Assert.AreEqual(-1, list.IndexFromContainer(oldContainer));
 
 				// Test container/index/item from new source
@@ -2913,17 +2935,17 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			var container1 = await WindowHelper.WaitForNonNull(() => list.ContainerFromIndex(0) as ListViewItem);
 			var text1 = container1.FindFirstDescendant<TextBlock>(tb => tb.Name == "TextBlockInTemplate");
 			Assert.IsNotNull(text1);
-			Assert.AreEqual(text1.Text, "Selectable A");
+			Assert.AreEqual("Selectable A", text1.Text);
 
 			var container2 = await WindowHelper.WaitForNonNull(() => list.ContainerFromIndex(1) as ListViewItem);
 			var text2 = container2.FindFirstDescendant<TextBlock>(tb => tb.Name == "TextBlockInTemplate");
 			Assert.IsNotNull(text2);
-			Assert.AreEqual(text2.Text, "Selectable B");
+			Assert.AreEqual("Selectable B", text2.Text);
 
 			var container3 = await WindowHelper.WaitForNonNull(() => list.ContainerFromIndex(2) as ListViewItem);
 			var text3 = container3.FindFirstDescendant<TextBlock>(tb => tb.Name == "TextBlockInTemplate");
 			Assert.IsNotNull(text3);
-			Assert.AreEqual(text3.Text, "Selectable C");
+			Assert.AreEqual("Selectable C", text3.Text);
 		}
 
 		[TestMethod]
@@ -3002,7 +3024,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			});
 
 			Assert.AreEqual(-1, list.SelectedIndex);
-			Assert.AreEqual(null, list.SelectedItem);
+			Assert.IsNull(list.SelectedItem);
 		}
 
 		[TestMethod]
@@ -3032,7 +3054,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			{
 				Assert.AreEqual(list.SelectedItem, "Item_1");
 				Assert.AreEqual(list.SelectedValue, "Item_1");
-				Assert.AreEqual(model.SelectedIndex, 1);
+				Assert.AreEqual(1, model.SelectedIndex);
 				Assert.AreEqual(model.SelectedItem, "Item_1");
 				Assert.AreEqual(model.SelectedValue, "Item_1");
 			};
@@ -3747,9 +3769,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 #endif
 
 		[TestMethod]
-		[RequiresFullWindow]
 		[RunsOnUIThread]
-		public async Task When_Incremental_Load()
+		public async Task When_Incremental_Load_Default()
 		{
 			const int BatchSize = 25;
 
@@ -3779,28 +3800,29 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			ScrollTo(list, 10000);
 			await Task.Delay(500);
 			await WindowHelper.WaitForIdle();
-			var firstScroll = GetCurrenState();
+			var first = GetCurrenState();
 
 			// scroll to bottom
 			ScrollTo(list, 10000);
 			await Task.Delay(500);
 			await WindowHelper.WaitForIdle();
-			var secondScroll = GetCurrenState();
+			var second = GetCurrenState();
 
-			Assert.AreEqual(BatchSize * 1, initial.LastLoaded, "Should start with first batch loaded.");
-			Assert.AreEqual(BatchSize * 2, firstScroll.LastLoaded, "Should have 2 batches loaded after first scroll.");
-			Assert.IsTrue(initial.LastMaterialized < firstScroll.LastMaterialized, "No extra item materialized after first scroll.");
-			Assert.AreEqual(BatchSize * 3, secondScroll.LastLoaded, "Should have 3 batches loaded after second scroll.");
-			Assert.IsTrue(firstScroll.LastMaterialized < secondScroll.LastMaterialized, "No extra item materialized after second scroll.");
+			Assert.IsTrue(initial.Count / BatchSize > 0, $"Should start with a few batch(es) loaded: count0={initial.Count}");
+			Assert.IsTrue(initial.Count + BatchSize <= first.Count, $"Should have more batch(es) loaded after first scroll: count0={initial.Count}, count1={first.Count}");
+			Assert.IsTrue(initial.LastMaterialized < first.LastMaterialized, $"No extra item materialized after first scroll: index0={initial.LastMaterialized}, index1={first.LastMaterialized}");
+			Assert.IsTrue(first.Count + BatchSize <= second.Count, $"Should have even more batch(es) after second scroll: count1={first.Count}, count2={second.Count}");
+			Assert.IsTrue(first.LastMaterialized < second.LastMaterialized, $"No extra item materialized after second scroll: index1={first.LastMaterialized}, index2={second.LastMaterialized}");
 
-			(int LastLoaded, int LastMaterialized) GetCurrenState() =>
+			(int Count, int LastMaterialized) GetCurrenState() =>
 			(
-				source.LastIndex,
-				Enumerable.Range(0, source.LastIndex).Reverse().FirstOrDefault(x => list.ContainerFromIndex(x) != null)
+				source.Count,
+				Enumerable.Range(0, source.Count).Reverse().FirstOrDefault(x => list.ContainerFromIndex(x) != null)
 			);
 		}
 
 		[TestMethod]
+		[RunsOnUIThread]
 		public async Task When_Incremental_Load_ShouldStop()
 		{
 			const int BatchSize = 25;
@@ -3842,16 +3864,16 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			await WindowHelper.WaitForIdle();
 			var secondScroll = GetCurrenState();
 
-			Assert.AreEqual(BatchSize * 1, initial.LastLoaded, "Should start with first batch loaded.");
-			Assert.AreEqual(BatchSize * 2, firstScroll.LastLoaded, "Should have 2 batches loaded after first scroll.");
-			Assert.IsTrue(initial.LastMaterialized < firstScroll.LastMaterialized, "No extra item materialized after first scroll.");
-			Assert.AreEqual(BatchSize * 2, secondScroll.LastLoaded, "Should still have 2 batches loaded after first scroll since HasMoreItems was false.");
-			Assert.AreEqual(BatchSize * 2 - 1, secondScroll.LastMaterialized, "Last materialized item should be the last from 2nd batch (50th/index=49).");
+			Assert.IsTrue(initial.Count / BatchSize > 0, $"Should start with a few batch(es) loaded: count0={initial.Count}");
+			Assert.IsTrue(initial.Count + BatchSize <= firstScroll.Count, $"Should have more batch(es) loaded after first scroll: count0={initial.Count}, count1={firstScroll.Count}");
+			Assert.IsTrue(initial.LastMaterialized < firstScroll.LastMaterialized, $"No extra item materialized after first scroll: index0={initial.LastMaterialized}, index={firstScroll.LastMaterialized}");
+			Assert.AreEqual(firstScroll.Count, secondScroll.Count, $"Should still have same number of batches after second scroll: count1={firstScroll.Count}, count2={secondScroll.Count}");
+			Assert.AreEqual(firstScroll.Count - 1, secondScroll.LastMaterialized, $"Should reach end of list from first scroll: count1={firstScroll.LastMaterialized}, index2={secondScroll.LastMaterialized}");
 
-			(int LastLoaded, int LastMaterialized) GetCurrenState() =>
+			(int Count, int LastMaterialized) GetCurrenState() =>
 			(
-				source.LastIndex,
-				Enumerable.Range(0, source.LastIndex).Reverse().FirstOrDefault(x => list.ContainerFromIndex(x) != null)
+				source.Count,
+				Enumerable.Range(0, source.Count).Reverse().FirstOrDefault(x => list.ContainerFromIndex(x) != null)
 			);
 		}
 
@@ -3918,7 +3940,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			var vsg = vsgs?.FirstOrDefault(x => x.Name == "MultiSelectStates");
 
 			Assert.IsNotNull(vsg, "VisualStateGroup[Name=MultiSelectStates] was not found.");
-			Assert.AreEqual(vsg.CurrentState?.Name, "MultiSelectEnabled");
+			Assert.AreEqual("MultiSelectEnabled", vsg.CurrentState?.Name);
 		}
 
 #if HAS_UNO
@@ -3950,12 +3972,12 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			Assert.IsNotNull(mscfe, "MultiSelectCheck was not found.");
 			Assert.IsNotNull(vsgMultiSelectStates, "VisualStateGroup[Name=MultiSelectStates] was not found.");
 			Assert.IsNotNull(vsgCommonStates, "VisualStateGroup[Name=CommonStates] was not found.");
-			Assert.AreEqual(vsgMultiSelectStates.CurrentState?.Name, "MultiSelectEnabled");
-			Assert.AreNotEqual(vsgCommonStates.CurrentState?.Name, "Selected");
-			Assert.AreEqual(mscfe.Opacity, 0);
+			Assert.AreEqual("MultiSelectEnabled", vsgMultiSelectStates.CurrentState?.Name);
+			Assert.AreNotEqual("Selected", vsgCommonStates.CurrentState?.Name);
+			Assert.AreEqual(0, mscfe.Opacity);
 			lvi0.IsSelected = true;
-			Assert.AreEqual(vsgCommonStates.CurrentState?.Name, "Selected");
-			Assert.AreEqual(mscfe.Opacity, 1);
+			Assert.AreEqual("Selected", vsgCommonStates.CurrentState?.Name);
+			Assert.AreEqual(1, mscfe.Opacity);
 		}
 #endif
 
@@ -4374,7 +4396,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 					Assert.AreEqual(Colors.White, ((SolidColorBrush)tb.Foreground).Color);
 				}
 
-				Assert.AreEqual(true, seenNewTextBlock);
+				Assert.IsTrue(seenNewTextBlock);
 			}
 		}
 
@@ -4652,7 +4674,6 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 					Content = new TextBlock
 					{
 						AllowDrop = true,
-						CanDrag = true,
 						Height = 100,
 						Text = i.ToString()
 					}
@@ -4784,6 +4805,34 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 		[TestMethod]
 		[RunsOnUIThread]
+		[SamplesApp.UITests.UnoWorkItem("https://github.com/unoplatform/kahua-private/issues/257")]
+#if !UNO_HAS_MANAGED_SCROLL_PRESENTER
+		[Ignore("This test is only for managed scrollers.")]
+#endif
+		public async Task When_ListView_Unloaded_Loaded_Scroll_Position()
+		{
+			var SUT = new ListView
+			{
+				ItemsSource = Enumerable.Range(0, 20).Select(i => i.ToString()).ToList(),
+				Height = 200
+			};
+
+			await UITestHelper.Load(SUT, x => x.IsLoaded); // custom criteria to prevent empty listview failure
+
+			var sv = SUT.FindFirstDescendant<ScrollViewer>() ?? throw new Exception("Failed to find the ListView's ScrollViewer");
+			sv.ScrollToVerticalOffset(300);
+			await UITestHelper.WaitForIdle();
+
+			Assert.AreEqual(300, sv.VerticalOffset);
+
+			await UITestHelper.Load(new Button());
+			await UITestHelper.Load(SUT, x => x.IsLoaded); // custom criteria to prevent empty listview failure
+
+			Assert.AreEqual(300, sv.VerticalOffset);
+		}
+
+		[TestMethod]
+		[RunsOnUIThread]
 #if __ANDROID__
 		[Ignore("droid: Scrollable/Extent-Height doesnt get updated until manually scroll occurs, but otherwise the visuals are good.")]
 #endif
@@ -4825,7 +4874,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 			await UITestHelper.WaitForIdle();
 
-			var tree = sut.TreeGraph();
+			//var tree = sut.TreeGraph();
 			var sv = sut.FindFirstDescendant<ScrollViewer>() ?? throw new Exception("Failed to find the ListView's ScrollViewer");
 
 			// Here we aren't verifying the viewport is entirely filled,
@@ -4835,6 +4884,34 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			Assert.IsNotNull(sut.ContainerFromIndex(source.Count - 1), "Container#n-1 is null");
 
 			Assert.AreEqual(sv.ScrollableHeight, sv.VerticalOffset, "ListView is not scrolled to the end.");
+		}
+
+		[TestMethod]
+		public async Task When_SelectionChanged_DuringRefresh()
+		{
+			var source = new ObservableCollection<string>(Enumerable.Range(0, 4).Select(x => $"Item {x}"));
+			var sut = new ListView
+			{
+				Height = source.Count * 29 * 1.5, // give ample room
+				ItemsSource = source,
+				ItemTemplate = FixedSizeItemTemplate, // height=29
+			};
+
+			await UITestHelper.Load(sut, x => x.IsLoaded);
+
+			Assert.IsTrue(Enumerable.Range(0, 4).All(x => sut.ContainerFromIndex(x) is { }), "All containers should be materialized.");
+
+			source.Move(1, 2); // swap: 0[1]23 -> 02[1]3
+			sut.SelectedItem = source[2]; // select "Item 1" (at index 2)
+
+			await UITestHelper.WaitForIdle();
+
+			var tree = sut.TreeGraph();
+			Assert.IsTrue(Enumerable.Range(0, 4).All(x => sut.ContainerFromIndex(x) is { }), "All containers should be materialized.");
+
+#if !(__ANDROID__ || __IOS__ || __MACOS__)
+			Assert.AreEqual(4, sut.ItemsPanelRoot.Children.OfType<ListViewItem>().Count(), "There should be only 4 materialized container.");
+#endif
 		}
 	}
 
@@ -5009,8 +5086,6 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			}
 
 			public bool HasMoreItems { get; set; } = true;
-
-			public int LastIndex => _start;
 		}
 
 		private record TestReleaseObject()

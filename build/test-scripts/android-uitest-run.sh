@@ -19,9 +19,8 @@ then
 		Namespace !~ SamplesApp.UITests.Snap\
 		& FullyQualifiedName !~ SamplesApp.UITests.Runtime.BenchmarkDotNetTests\
 		& FullyQualifiedName !~ SamplesApp.UITests.Runtime.RuntimeTests\
-		& Category~testBucket:$UNO_UITEST_BUCKET_ID
+		& Category~testBucket:$UNO_UITEST_BUCKET_ID\
 	";
-
 	export SCREENSHOTS_FOLDERNAME=android-$ANDROID_SIMULATOR_APILEVEL-$TARGETPLATFORM_NAME
 
 elif [ "$UITEST_TEST_MODE_NAME" == 'RuntimeTests' ];
@@ -39,7 +38,8 @@ export UNO_UITEST_ANDROIDAPK_PATH=$BUILD_SOURCESDIRECTORY/build/$SAMPLEAPP_ARTIF
 export IsUiAutomationMappingEnabled=true
 export UITEST_RUNTIME_TEST_GROUP=${UITEST_RUNTIME_TEST_GROUP=automated}
 export UNO_TESTS_LOCAL_TESTS_FILE=$BUILD_SOURCESDIRECTORY/src/SamplesApp/SamplesApp.UITests
-export UNO_ORIGINAL_TEST_RESULTS=$BUILD_SOURCESDIRECTORY/build/TestResult-original.xml
+export UNO_ORIGINAL_TEST_RESULTS_DIRECTORY=$BUILD_SOURCESDIRECTORY/build
+export UNO_ORIGINAL_TEST_RESULTS=$UNO_ORIGINAL_TEST_RESULTS_DIRECTORY/TestResult-original.xml
 export UNO_TESTS_FAILED_LIST=$BUILD_SOURCESDIRECTORY/build/uitests-failure-results/failed-tests-android-$ANDROID_SIMULATOR_APILEVEL-$SCREENSHOTS_FOLDERNAME-$UNO_UITEST_BUCKET_ID-$UITEST_RUNTIME_TEST_GROUP-$TARGETPLATFORM_NAME.txt
 export UNO_TESTS_RESPONSE_FILE=$BUILD_SOURCESDIRECTORY/build/nunit.response
 export UNO_UITEST_RUNTIMETESTS_RESULTS_FILE_PATH=$BUILD_SOURCESDIRECTORY/build/RuntimeTestResults-android-automated-$ANDROID_SIMULATOR_APILEVEL-$TARGETPLATFORM_NAME.xml
@@ -231,15 +231,13 @@ else
 
 	cd $UNO_TESTS_LOCAL_TESTS_FILE
 
-	## Run NUnit tests
-	dotnet test \
-		-c Release \
-		-l:"console;verbosity=normal" \
-		--logger "nunit;LogFileName=$UNO_ORIGINAL_TEST_RESULTS" \
-		--filter "$UNO_TESTS_FILTER" \
-		--blame-hang-timeout 120m \
-		-v m || true
+	# Response file for testing to avoid the command line length limitation
+	# new parameters must include the ":" to separate parameter options
+	# the response file contains only the filters, in order to get proper stderr
+	echo "--filter:\"$UNO_TESTS_FILTER\"" > tests.rsp
 
+	## Run NUnit tests
+	dotnet run -c Release -bl:$UNO_ORIGINAL_TEST_RESULTS_DIRECTORY/android-test.binlog -- --results-directory $UNO_ORIGINAL_TEST_RESULTS_DIRECTORY --settings .runsettings @tests.rsp || true
 fi
 
 ## Dump the emulator's system log
@@ -253,9 +251,13 @@ fi
 pushd $BUILD_SOURCESDIRECTORY/src/Uno.NUnitTransformTool
 mkdir -p $(dirname ${UNO_TESTS_FAILED_LIST})
 
-# Fail the build on empty results
-dotnet run fail-empty $UNO_ORIGINAL_TEST_RESULTS $UNO_TESTS_FAILED_LIST
+echo "Running NUnitTransformTool"
 
-## Export the failed tests list for reuse in a pipeline retry
-dotnet run list-failed $UNO_ORIGINAL_TEST_RESULTS $UNO_TESTS_FAILED_LIST
+## Fail the build when no test results could be read
+dotnet run fail-empty $UNO_ORIGINAL_TEST_RESULTS
+
+if [ $? -eq 0 ]; then
+	dotnet run list-failed $UNO_ORIGINAL_TEST_RESULTS $UNO_TESTS_FAILED_LIST
+fi
+
 popd

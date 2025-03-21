@@ -29,6 +29,7 @@
 		Condition=" $(_IsUnoSingleProjectAndLegacy) == 'true' ">
 		<ItemGroup>
 			<None Remove="@(_IgnorePlatformFiles)" />
+			<Page Remove="@(_IgnorePlatformFiles)" />
 			<Compile Remove="@(_IgnorePlatformFiles)" />
 			<Content Remove="@(_IgnorePlatformFiles)" />
 			<EmbeddedResource Remove="@(_IgnorePlatformFiles)" />
@@ -139,6 +140,43 @@
 						OR $([MSBuild]::GetTargetPlatformIdentifier($(TargetFramework))) == 'maccatalyst'
 					)" />
 
+	</Target>
+
+	<Target Name="_UnoVSCleanupOtherTFMsForHR"
+            Condition="
+				'$(IsImplicitlyTriggeredBuild)' == 'true'
+				AND '$(BuildingInsideVisualStudio)'=='true'
+				AND ( '$(_ImplicitRestoreOutputType)' == 'WinExe' OR '$(_ImplicitRestoreOutputType)' == 'Exe' )
+				AND '$(UnoDisableVSCleanupOtherTFMsForHR)' != 'false'"
+            BeforeTargets="BeforeBuild">
+
+		<!-- This workaround is required for https://github.com/dotnet/maui/issues/27612 in Visual Studio -->
+
+        <ItemGroup>
+            <_HeadsToDelete Include="$(BaseIntermediateOutputPath)\**\$(AssemblyName).dll" Exclude="$(IntermediateOutputPath)\$(AssemblyName).dll" />
+        </ItemGroup>
+
+        <Message Importance="low" Text="Deleting intermediate assemblies for HR: @(_HeadsToDelete)" />
+
+        <Delete Files="@(_HeadsToDelete)" />
+
+        <ItemGroup>
+            <_HeadsToDelete Remove="@(_HeadsToDelete)" />
+        </ItemGroup>
+    </Target>
+
+	<Target Name="UnoDumpTargetFrameworks">
+		<!--
+			This target is used to dump the target frameworks to the output window.
+			It is useful to determine all target frameworks used by all projects of a solution.
+		-->
+		<Message Text="&lt;TargetFrameworks&gt;$(TargetFramework);$(TargetFrameworks)&lt;/TargetFrameworks&gt;" Importance="High" />
+		<WriteLinesToFile
+			Condition="$(UnoDumpTargetFrameworksTargetFile) != ''"
+			File="$(UnoDumpTargetFrameworksTargetFile)"
+			Lines="$(TargetFramework);$(TargetFrameworks)"
+			Overwrite="false"
+			Encoding="Unicode"/>
 	</Target>
 
 	<Import Project="Uno.SingleProject.VS.Build.targets"

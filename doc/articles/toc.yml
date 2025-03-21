@@ -32,24 +32,41 @@
     - name: Troubleshoot
       topicHref: xref:Uno.UI.CommonIssues
       items:
-      - name: All Development Environments
-        href: xref:Uno.UI.CommonIssues.AllIDEs
-      - name: Visual Studio 2022 for Windows
-        href: xref:Uno.UI.CommonIssues.vs2022
-      - name: VS Code
-        href: xref:Uno.UI.CommonIssues.vscode
-      - name: WebAssembly
-        href: xref:Uno.UI.CommonIssues.Wasm
-      - name: UWP
-        href: xref:Uno.UI.CommonIssues.UWP
-      - name: Skia (Gtk/Wpf/Framebuffer)
-        href: xref:Uno.UI.CommonIssues.Skia
-      - name: iOS/mac Catalyst
-        href: xref:Uno.UI.CommonIssues.IosCatalyst
-      - name: Troubleshooting build errors
-        href: uno-builds-troubleshooting.md
-      - name: Build error codes
-        href: xref:Build.Solution.error-codes
+      - name: Overview
+        href: xref:Uno.UI.CommonIssues
+      - name: Sign in with Uno Platform
+        href: xref:Uno.GetStarted.Licensing
+      - name: Hot Reload
+        topicHref: xref:Uno.Features.HotReload#troubleshooting
+      - name: Development Environments
+        topicHref: xref:Uno.UI.CommonIssues.AllIDEs
+        items:
+        - name: All Development Environments
+          href: xref:Uno.UI.CommonIssues.AllIDEs
+        - name: Visual Studio 2022 for Windows
+          href: xref:Uno.UI.CommonIssues.vs2022
+        - name: VS Code
+          href: xref:Uno.UI.CommonIssues.vscode
+        - name: Rider
+          href: xref:Uno.UI.CommonIssues.rider
+      - name: Platforms
+        topicHref: xref:Uno.UI.CommonIssues.Wasm
+        items:
+        - name: WebAssembly
+          href: xref:Uno.UI.CommonIssues.Wasm
+        - name: UWP
+          href: xref:Uno.UI.CommonIssues.UWP
+        - name: Skia (Gtk/Wpf/Framebuffer)
+          href: xref:Uno.UI.CommonIssues.Skia
+        - name: iOS/mac Catalyst
+          href: xref:Uno.UI.CommonIssues.IosCatalyst
+      - name: Build Errors
+        topicHref: xref:Uno.Development.Troubleshooting
+        items:
+        - name: Troubleshooting build errors
+          href: xref:Uno.Development.Troubleshooting
+        - name: Build error codes
+          href: xref:Build.Solution.error-codes
 
 - name: Samples & Tutorials
   topicHref: xref:Uno.SamplesTutorials.Overview
@@ -69,6 +86,8 @@
         href: xref:Uno.Workshop.Counter.CSharp.MVUX
       - name: C# Markup + MVVM
         href: xref:Uno.Workshop.Counter.CSharp.MVVM
+      - name: Hot Design
+        href: xref:Uno.HotDesign.GetStarted.CounterTutorial
     - name: Simple Calc
       topicHref: xref:Workshop.SimpleCalc.Overview
       href: external/workshops/simple-calc/toc.yml
@@ -107,6 +126,8 @@
         href: xref:Uno.Interop.MSAL
       - name: How to authenticate with OpenID Connect
         href: xref:Uno.Tutorials.OpenIDConnect
+      - name: How to implement a sign-in with Apple Button
+        href: xref:Uno.Tutorials.SignInWithApple
       - name: Embed a JavaScript Component
         topicHref: xref:Uno.Interop.WasmJavaScript1
         items:
@@ -188,6 +209,8 @@
           href: xref:uno.vscode.mobile.advanced.debugging
         - name: Generic Unhandled Exceptions handler
           href: xref:Uno.Development.UnhandledExceptions
+        - name: Debugging Troubleshooting
+          href: xref:Uno.Debugging.Troubleshooting
 
     - name: Embedding
       items:
@@ -208,6 +231,8 @@
         href: xref:Uno.Development.MigratingToSingleProject
       - name: Upgrading to Uno 5.0
         href: xref:Uno.Development.MigratingToUno5
+      - name: Upgrading from .NET 8 to .NET 9
+        href: xref:Uno.Development.MigratingFromNet8ToNet9
       - name: Upgrading from .NET 7 to .NET 8
         href: xref:Uno.Development.MigratingFromNet7ToNet8
       - name: Upgrading from Xamarin to .NET 6
@@ -245,10 +270,19 @@
         - name: Overview
           href: xref:uno.publishing.overview
         - name: Publishing for Desktop
-          href: xref:uno.publishing.desktop
+          topicHref: xref:uno.publishing.desktop
+          items:
+            - name: Publishing Your App for Desktop
+              href: xref:uno.publishing.desktop
+            - name: Publishing Your App for macOS
+              href: xref:uno.publishing.desktop.macos
+            - name: Publishing Your App for macOS - Advanced Topics
+              href: xref:uno.publishing.desktop.macos.advanced
+            - name: Publishing Your App for Linux
+              href: xref:uno.publishing.desktop.linux
         - name: Publishing for WebAssembly
           href: xref:uno.publishing.webassembly
-        - name: Publishing for Windows
+        - name: Publishing for Windows App SDK
           topicHref: xref:uno.publishing.windows
           items:
             - name: Build Packaged Unsigned Apps
@@ -270,6 +304,8 @@
           href: xref:Build.Solution.TargetFramework-override
         - name: Performance tips
           href: Uno-UI-Performance.md
+        - name: Memory Profiling
+          href: xref:Uno.Contributing.MemoryIssues
         - name: How to profile applications
           href: guides/profiling-applications.md
         - name: IL Linker for WebAssembly
@@ -386,6 +422,26 @@
     - name: FAQ
       href: xref:Uno.Development.FAQ
 
+- name: Studio
+  items:
+    - name: Overview
+      href: xref:Uno.Platform.Studio.Overview
+    - name: Hot Reload
+      href: xref:Uno.Platform.Studio.HotReload.Overview
+    - name: Hot Design
+      href: xref:Uno.HotDesign.Overview
+      items:
+      - name: Overview
+        href: xref:Uno.HotDesign.Overview
+      - name: Getting Started with Hot Design
+        href: xref:Uno.HotDesign.GetStarted.Guide
+      - name: Counter Tutorial
+        href: xref:Uno.HotDesign.GetStarted.CounterTutorial
+    - name: Design-to-Code
+      href: external/figma-docs/toc.yml
+    - name: Feedback
+      href: xref:Uno.Platform.Studio.Feedback
+
 - name: Reference
   items:
     - name: Overview
@@ -426,22 +482,32 @@
           topicHref: implemented-views.md
         - name: Uno Specifics
           items:
+            - name: AdaptiveTrigger
+              href: xref:Uno.Features.AdaptiveTrigger
+            - name: Activities in Android
+              href: android-activities.md
             - name: ComboBox
               href: controls/ComboBox.md
             - name: CommandBar
               href: controls/CommandBar.md
             - name: DatePicker
               href: controls/DatePicker.md
+            - name: ElevatedView
+              href: features/ElevatedView.md
+            - name: Fluent icon font
+              href: uno-fluent-assets.md
             - name: Flyout
               href: controls/Flyout.md
             - name: Frame
               href: controls/Frame.md
             - name: GLCanvasElement
-              href: controls/GLCanvasElement.md
+              href: xref:Uno.Controls.GLCanvasElement
             - name: Image
               href: xref:Uno.Features.Image
             - name: ListView and GridView
               href: controls/ListViewBase.md
+            - name: Lottie animations
+              href: features/Lottie.md
             - name: MapControl
               href: controls/map-control-support.md
             - name: MediaPlayerElement
@@ -450,6 +516,10 @@
               href: controls/MenuFlyout.md
             - name: NavigationView
               href: controls/NavigationView.md
+            - name: Native control styles
+              href: native-styles.md
+            - name: Other features
+              href: xref:Uno.Development.AdditionalFeatures
             - name: Pivot
               href: controls/Pivot.md
             - name: Popup
@@ -460,36 +530,24 @@
               href: controls/RefreshContainer.md
             - name: ScrollViewer
               href: controls/ScrollViewer.md
+            - name: SKCanvasElement
+              href: xref:Uno.Controls.SKCanvasElement
             - name: TextBox
               href: controls/TextBox.md
             - name: TimePicker
               href: controls/TimePicker.md
             - name: ToggleSwitch
               href: controls/ToggleSwitch.md
-            - name: WebView (WebView2)
-              href: controls/WebView.md
-            - name: Fluent icon font
-              href: uno-fluent-assets.md
-            - name: Lottie animations
-              href: features/Lottie.md
-            - name: Using SVG images
-              href: features/svg.md
-            - name: Using pointer cursors
-              href: features/cursors.md
-            - name: ElevatedView
-              href: features/ElevatedView.md
-            - name: VisibleBoundsPadding
-              href: xref:Uno.Features.VisibleBoundsPadding
-            - name: AdaptiveTrigger
-              href: xref:Uno.Features.AdaptiveTrigger
-            - name: Other features
-              href: xref:Uno.Development.AdditionalFeatures
-            - name: Native control styles
-              href: native-styles.md
             - name: URI Protocol activation
               href: features/protocol-activation.md
-            - name: Activities in Android
-              href: android-activities.md
+            - name: Using pointer cursors
+              href: features/cursors.md
+            - name: Using SVG images
+              href: features/svg.md
+            - name: VisibleBoundsPadding
+              href: xref:Uno.Features.VisibleBoundsPadding
+            - name: WebView (WebView2)
+              href: controls/WebView.md
 
       - name: Features
         items:
@@ -499,6 +557,8 @@
           href: features/working-with-animations.md
         - name: Assets and image display
           href: features/working-with-assets.md
+        - name: Build telemetry
+          href: uno-toolchain-telemetry.md
         - name: Composition API
           href: composition.md
         - name: Dialogs
@@ -509,6 +569,8 @@
           href: features/focus-management.md
         - name: Fonts
           href: features/custom-fonts.md
+        - name: Markup Extensions
+          href: features/windows-ui-markup-extensions.md
         - name: Native frame navigation
           href: features/native-frame-nav.md
         - name: Orientation
@@ -519,22 +581,18 @@
           href: features/shapes-and-brushes.md
         - name: String resources and localization
           href: features/working-with-strings.md
+        - name: Succinct syntax
+          href: features/windows-ui-succinct-syntax.md
         - name: Themes
           href: features/working-with-themes.md
         - name: User inputs - Keyboard, Pointers, Gestures, Manipulations, Drag and drop
           href: features/pointers-keyboard-and-other-user-inputs.md
         - name: Using Fluent styles in legacy apps
           href: features/using-winui2.md
-        - name: x:Bind
-          href: features/windows-ui-xaml-xbind.md
-        - name: Succinct syntax
-          href: features/windows-ui-succinct-syntax.md
-        - name: Markup Extensions
-          href: features/windows-ui-markup-extensions.md
-        - name: Build telemetry
-          href: uno-toolchain-telemetry.md
         - name: Windowing
           href: features/windows-ui-xaml-window.md
+        - name: x:Bind
+          href: features/windows-ui-xbind.md
 
       - name: 3rd-party libraries
         href: supported-libraries.md
@@ -561,6 +619,8 @@
         href: features/windows-system-power.md
       - name: Bluetooth
         href: features/bluetoothdevice.md
+      - name: Capture (Camera)
+        href: features/windows-media-capture.md
       - name: Clipboard
         href: features/clipboard.md
       - name: Compass
@@ -575,10 +635,10 @@
         href: features/windows-system-profile.md
       - name: E-mail
         href: features/windows-applicationmodel-email.md
-      - name: File Management
-        href: features/file-management.md
       - name: File and Folder Pickers
         href: features/windows-storage-pickers.md
+      - name: File Management
+        href: features/file-management.md
       - name: Flashlight
         href: features/flashlight.md
       - name: Gamepad
@@ -609,16 +669,18 @@
         href: features/windows-applicationmodel-calls.md
       - name: Proximity Sensor
         href: features/proximity-sensor.md
+      - name: Settings
+        href: features/settings.md
       - name: Sharing
         href: features/windows-applicationmodel-datatransfer.md
       - name: SMS
         href: features/windows-applicationmodel-chat.md
-      - name: Settings
-        href: features/settings.md
       - name: Speech Recognition
         href: features/SpeechRecognition.md
       - name: Step Counter
         href: features/step-counter.md
+      - name: Store Context
+        href: features/windows-ui-storecontext.md
       - name: Title Bar Customization
         href: features/windows-ui-viewmanagement.md
       - name: URI Launcher
@@ -643,10 +705,6 @@
 - name: Toolkit
   #topicHref: external/uno.toolkit.ui/doc/getting-started.md
   href: external/uno.toolkit.ui/doc/toc.yml
-  
-- name: Figma
-  #topicHref: xref:Uno.Figma.GetStarted
-  href: external/figma-docs/toc.yml
 
 - name: Tooling
   items:

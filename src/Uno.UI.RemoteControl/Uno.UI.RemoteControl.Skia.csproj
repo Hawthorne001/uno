@@ -35,7 +35,6 @@
 
 	<ItemGroup>
 		<PackageReference Include="Newtonsoft.Json" />
-		<PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="2.3.2" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -68,10 +67,6 @@
 		<Page Remove="RemoteControlStatusView.xaml" />
 		<Compile Remove="RemoteControlStatusView.cs" />
 		<None Include="RemoteControlStatusView.cs" />
-
-		<Page Remove="HotReload\HotReloadStatusView.xaml" />
-		<Compile Remove="HotReload\HotReloadStatusView.cs" />
-		<None Include="HotReload\HotReloadStatusView.cs" />
 	</ItemGroup>
 	<PropertyGroup Condition="'$(UNO_UWP_BUILD)'=='true'">
 		<PageExclusions>$(MSBuildThisFileDirectory)**\*.xaml</PageExclusions>

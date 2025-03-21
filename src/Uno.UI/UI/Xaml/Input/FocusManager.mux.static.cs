@@ -408,7 +408,7 @@ namespace Microsoft.UI.Xaml.Input
 			return candidate as UIElement;
 		}
 
-		private object? FindNextFocusWithSearchRootIgnoreEngagementImpl(FocusNavigationDirection focusNavigationDirection, object? pSearchRoot)
+		internal object? FindNextFocusWithSearchRootIgnoreEngagementImpl(FocusNavigationDirection focusNavigationDirection, object? pSearchRoot)
 		{
 			object? spScope = pSearchRoot;
 			DependencyObject? spScopeDO = spScope as DependencyObject;
@@ -462,7 +462,7 @@ namespace Microsoft.UI.Xaml.Input
 		/// <param name="isProcessingTab">Is tab being processed?</param>
 		/// <param name="isShiftPressed">Is shift pressed?</param>
 		/// <returns>True if focus successfully transitioned.</returns>
-		private bool SetFocusedElement(
+		internal bool SetFocusedElement(
 			 DependencyObject pElement,
 			 FocusState focusState,
 			 bool animateIfBringIntoView,
@@ -488,7 +488,8 @@ namespace Microsoft.UI.Xaml.Input
 				focusState,
 				animateIfBringIntoView,
 				forceBringIntoView,
-				focusNavigationDirection);
+				focusNavigationDirection,
+				false);
 
 			return pFocusUpdated;
 		}
@@ -507,7 +508,8 @@ namespace Microsoft.UI.Xaml.Input
 			 FocusState focusState,
 			 bool animateIfBringIntoView,
 			 bool forceBringIntoView,
-			 FocusNavigationDirection focusNavigationDirection)
+			 FocusNavigationDirection focusNavigationDirection,
+			 bool requestInputActivation) // TODO Uno: Add support for input activation
 		{
 			DependencyObject? spElementToFocus = pElement;
 			Control? spControlToFocus;

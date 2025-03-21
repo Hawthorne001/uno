@@ -127,6 +127,13 @@ namespace SamplesApp
 #endif
 			EnsureMainWindow();
 
+#if __WASM__
+			DispatcherQueue.Main.TryEnqueue(
+				DispatcherQueuePriority.Low,
+				() => InitWasmSampleRunner()
+			);
+#endif
+
 			SetupAndroidEnvironment();
 
 #if __IOS__ && !__MACCATALYST__ && !TESTFLIGHT
@@ -152,11 +159,8 @@ namespace SamplesApp
 			}
 
 			var sw = Stopwatch.StartNew();
-#if DEBUG
-			if (System.Diagnostics.Debugger.IsAttached)
-			{
-				// this.DebugSettings.EnableFrameRateCounter = true;
-			}
+#if WINAPPSDK && DEBUG
+			// this.DebugSettings.EnableFrameRateCounter = true;
 #endif
 			AssertInitialWindowSize();
 
@@ -542,8 +546,12 @@ namespace SamplesApp
 #if HAS_UNO
 			Uno.UI.FeatureConfiguration.TextBox.UseOverlayOnSkia = false;
 			Uno.UI.FeatureConfiguration.ToolTip.UseToolTips = true;
+			Uno.UI.FeatureConfiguration.DependencyProperty.ValidatePropertyOwnerOnReadWrite = true;
 
 			Uno.UI.FeatureConfiguration.Font.DefaultTextFontFamily = "ms-appx:///Uno.Fonts.OpenSans/Fonts/OpenSans.ttf";
+#endif
+#if __ANDROID__
+			Uno.WinRTFeatureConfiguration.StoreContext.TestMode = true;
 #endif
 		}
 
@@ -611,6 +619,9 @@ namespace SamplesApp
 #endif
 		}
 
+#if __WASM__
+		[System.Runtime.InteropServices.JavaScript.JSExport]
+#endif
 		public static string GetDisplayScreenScaling(string displayId)
 			=> (DisplayInformation.GetForCurrentView().LogicalDpi * 100f / 96f).ToString(CultureInfo.InvariantCulture);
 	}

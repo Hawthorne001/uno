@@ -274,7 +274,14 @@ namespace Microsoft.UI.Xaml.Controls
 			}
 			else if (UseInlinesFastPath)
 			{
-				return JavaStringCache.GetNativeString(Text);
+				if (FeatureConfiguration.TextBlock.IsJavaStringCachedEnabled)
+				{
+					return JavaStringCache.GetNativeString(Text);
+				}
+				else
+				{
+					return new Java.Lang.String(Text);
+				}
 			}
 			else
 			{
@@ -560,7 +567,15 @@ namespace Microsoft.UI.Xaml.Controls
 
 			public void Build()
 			{
-				MeasuredSize = UpdateLayout(AvailableSize, _exactWidth);
+				if (AvailableSize.Width < 0 || AvailableSize.Height < 0)
+				{
+					// The layout is invalid, we can't build it.
+					MeasuredSize = new Size(0, 0);
+				}
+				else
+				{
+					MeasuredSize = UpdateLayout(AvailableSize, _exactWidth);
+				}
 			}
 
 			/// <summary>

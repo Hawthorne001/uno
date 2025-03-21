@@ -39,128 +39,6 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			_testsResources = new TestsResources();
 		}
 
-#if __SKIA__ || __WASM__
-		[TestMethod]
-		public async Task When_CreateVerticalScroller_Then_DoNotLoadAllTemplate()
-		{
-			var sut = new ScrollViewer
-			{
-				VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-				VerticalScrollMode = ScrollMode.Enabled,
-				HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-				HorizontalScrollMode = ScrollMode.Disabled,
-				Height = 100,
-				Width = 100,
-				Content = new Border { Height = 200, Width = 50 }
-			};
-			WindowHelper.WindowContent = sut;
-
-			await WindowHelper.WaitForIdle();
-
-			var buttons = sut
-				.EnumerateAllChildren(maxDepth: 256)
-				.OfType<RepeatButton>()
-				.Count();
-
-			Assert.IsTrue(buttons > 0); // We make sure that we really loaded the right template
-			Assert.IsTrue(buttons <= 4);
-		}
-
-
-		[TestMethod]
-		public async Task When_NonScrollableScroller_Then_DoNotLoadAllTemplate()
-		{
-			var sut = new ScrollViewer
-			{
-				VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-				VerticalScrollMode = ScrollMode.Enabled,
-				HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-				HorizontalScrollMode = ScrollMode.Disabled,
-				Height = 100,
-				Width = 100,
-				Content = new Border { Height = 50, Width = 50 }
-			};
-			WindowHelper.WindowContent = sut;
-
-			await WindowHelper.WaitForIdle();
-
-			var buttons = sut
-				.EnumerateAllChildren(maxDepth: 256)
-				.OfType<RepeatButton>()
-				.Count();
-
-			Assert.IsTrue(buttons == 0);
-		}
-
-		[TestMethod]
-		public async Task When_ScrollViewer_Pointer_Released_Should_Not_Focus()
-		{
-			var scrollViewer = new ScrollViewer();
-			var stackPanel = new StackPanel();
-			stackPanel.Children.Add(new Button() { Content = "First button" });
-			stackPanel.Children.Add(new Button() { Content = "Second button" });
-			stackPanel.Children.Add(new Rectangle() { Fill = new SolidColorBrush() { Color = Colors.Red }, Width = 100, Height = 100 });
-
-			scrollViewer.Content = stackPanel;
-
-			WindowHelper.WindowContent = scrollViewer;
-			await WindowHelper.WaitForLoaded(scrollViewer);
-
-			// Focus second button
-			var secondButton = stackPanel.Children[1] as Button;
-			secondButton.Focus(FocusState.Programmatic);
-
-			// Tap the rectangle center
-			var rectangle = stackPanel.Children[2] as Rectangle;
-			InputHelper.Tap(rectangle);
-
-			await WindowHelper.WaitForIdle();
-
-			// Second button should still be focused
-			Assert.AreEqual(secondButton, FocusManager.GetFocusedElement(WindowHelper.WindowContent.XamlRoot));
-		}
-
-		[TestMethod]
-		public async Task When_HorizontallyScrollableTextBox_Then_DoNotLoadAllScrollerTemplate()
-		{
-			var sut = new TextBox
-			{
-				Width = 100,
-				Text = "Hello world, this a long text that would cause the TextBox to enable horizontal scroll, so we should find some RepeatButton in the children of this TextBox."
-			};
-			WindowHelper.WindowContent = sut;
-
-			await WindowHelper.WaitForIdle();
-
-			var bars = sut
-				.EnumerateAllChildren(maxDepth: 256)
-				.OfType<ScrollBar>()
-				.Count();
-
-			Assert.IsTrue(bars == 0); // TextBox is actually not using scrollbars!
-		}
-
-		[TestMethod]
-		public async Task When_NonScrollableTextBox_Then_DoNotLoadAllScrollerTemplate()
-		{
-			var sut = new TextBox
-			{
-				Width = 100,
-				Text = "42"
-			};
-			WindowHelper.WindowContent = sut;
-
-			await WindowHelper.WaitForIdle();
-
-			var bars = sut
-				.EnumerateAllChildren(maxDepth: 256)
-				.OfType<ScrollBar>()
-				.Count();
-
-			Assert.IsTrue(bars == 0); // TextBox is actually not using scrollbars!
-		}
-#endif
-
 		[TestMethod]
 		[RunsOnUIThread]
 		[RequiresFullWindow]
@@ -298,22 +176,22 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 			var SUT = border.FindVisualChildByType<ScrollViewer>();
 
-			KeyboardHelper.Down();
+			await KeyboardHelper.Down();
 			await WindowHelper.WaitForIdle();
-			KeyboardHelper.Down();
+			await KeyboardHelper.Down();
 			await WindowHelper.WaitForIdle();
-			KeyboardHelper.Right();
+			await KeyboardHelper.Right();
 			await WindowHelper.WaitForIdle();
-			KeyboardHelper.Right();
+			await KeyboardHelper.Right();
 			await WindowHelper.WaitForIdle();
 
 			// Horizontal and vertical scrolling amounts should be independent, and each depend on the corresponding ActualSize dimension
 			Assert.AreEqual(verticalDelta * 2, SUT.VerticalOffset);
 			Assert.AreEqual(horizontalDelta * 2, SUT.HorizontalOffset);
 
-			KeyboardHelper.Up();
+			await KeyboardHelper.Up();
 			await WindowHelper.WaitForIdle();
-			KeyboardHelper.Left();
+			await KeyboardHelper.Left();
 			await WindowHelper.WaitForIdle();
 
 			Assert.AreEqual(verticalDelta, SUT.VerticalOffset);
@@ -391,27 +269,27 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 			var SUT = border.FindVisualChildByType<ScrollViewer>();
 
-			KeyboardHelper.PageDown();
+			await KeyboardHelper.PageDown();
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(175, SUT.VerticalOffset);
 			Assert.AreEqual(0, SUT.HorizontalOffset);
 
-			KeyboardHelper.PageDown();
+			await KeyboardHelper.PageDown();
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(350, SUT.VerticalOffset);
 			Assert.AreEqual(0, SUT.HorizontalOffset);
 
-			KeyboardHelper.PressKeySequence("$d$_pageup#$u$_pageup");
+			await KeyboardHelper.PressKeySequence("$d$_pageup#$u$_pageup");
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(175, SUT.VerticalOffset);
 			Assert.AreEqual(0, SUT.HorizontalOffset);
 
-			KeyboardHelper.PressKeySequence("$d$_home#$u$_home");
+			await KeyboardHelper.PressKeySequence("$d$_home#$u$_home");
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(0, SUT.VerticalOffset);
 			Assert.AreEqual(0, SUT.HorizontalOffset);
 
-			KeyboardHelper.PressKeySequence("$d$_end#$u$_end");
+			await KeyboardHelper.PressKeySequence("$d$_end#$u$_end");
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(1825, SUT.VerticalOffset);
 			Assert.AreEqual(0, SUT.HorizontalOffset);
@@ -451,35 +329,35 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			border.FindVisualChildByType<ItemsControl>().Focus(FocusState.Programmatic);
 			await WindowHelper.WaitForIdle();
 
-			KeyboardHelper.PressKeySequence("$d$_pageup#$u$_pageup");
+			await KeyboardHelper.PressKeySequence("$d$_pageup#$u$_pageup");
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(0, keyDownCount);
 
-			KeyboardHelper.PageDown();
+			await KeyboardHelper.PageDown();
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(0, keyDownCount);
 
-			KeyboardHelper.PressKeySequence("$d$_pageup#$u$_pageup");
+			await KeyboardHelper.PressKeySequence("$d$_pageup#$u$_pageup");
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(0, keyDownCount);
 
-			KeyboardHelper.PressKeySequence("$d$_home#$u$_home");
+			await KeyboardHelper.PressKeySequence("$d$_home#$u$_home");
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(1, keyDownCount);
 
-			KeyboardHelper.PressKeySequence("$d$_end#$u$_end");
+			await KeyboardHelper.PressKeySequence("$d$_end#$u$_end");
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(1, keyDownCount);
 
-			KeyboardHelper.PressKeySequence("$d$_end#$u$_end");
+			await KeyboardHelper.PressKeySequence("$d$_end#$u$_end");
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(2, keyDownCount);
 
-			KeyboardHelper.PageDown();
+			await KeyboardHelper.PageDown();
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(3, keyDownCount);
 
-			KeyboardHelper.PressKeySequence("$d$_home#$u$_home");
+			await KeyboardHelper.PressKeySequence("$d$_home#$u$_home");
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(3, keyDownCount);
 		}
@@ -518,38 +396,38 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 			border.FindVisualChildByType<ItemsControl>().Focus(FocusState.Programmatic);
 			await WindowHelper.WaitForIdle();
 
-			KeyboardHelper.Left();
+			await KeyboardHelper.Left();
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(1, keyDownCount);
 
-			KeyboardHelper.Up();
+			await KeyboardHelper.Up();
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(2, keyDownCount);
 
-			KeyboardHelper.Down();
+			await KeyboardHelper.Down();
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(2, keyDownCount);
 
-			KeyboardHelper.Up();
+			await KeyboardHelper.Up();
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(2, keyDownCount);
 
-			KeyboardHelper.Right();
+			await KeyboardHelper.Right();
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(2, keyDownCount);
 
-			KeyboardHelper.Left();
+			await KeyboardHelper.Left();
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(2, keyDownCount);
 
 			SUT.FindVisualChildByType<ScrollContentPresenter>().SetHorizontalOffset(999999);
 			SUT.FindVisualChildByType<ScrollContentPresenter>().SetVerticalOffset(999999);
 
-			KeyboardHelper.Down();
+			await KeyboardHelper.Down();
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(2, keyDownCount);
 
-			KeyboardHelper.Right();
+			await KeyboardHelper.Right();
 			await WindowHelper.WaitForIdle();
 			Assert.AreEqual(3, keyDownCount);
 		}
@@ -742,7 +620,7 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 			// This test is targeted at WASM, but this doesn't simulate a real space (like e.g. puppeteer would),
 			// so the test is not really validating much, merely documenting behaviour
-			KeyboardHelper.Space();
+			await KeyboardHelper.Space();
 			await WindowHelper.WaitForIdle();
 
 			Assert.AreEqual(0, SUT.VerticalOffset);
@@ -973,8 +851,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 			item.BringIntoViewRequested += (s, e) =>
 			{
-				Assert.AreEqual(false, e.AnimationDesired);
-				Assert.AreEqual(false, e.Handled);
+				Assert.IsFalse(e.AnimationDesired);
+				Assert.IsFalse(e.Handled);
 				Assert.IsTrue(double.IsNaN(e.HorizontalAlignmentRatio));
 				Assert.IsTrue(double.IsNaN(e.VerticalAlignmentRatio));
 				Assert.AreEqual(0, e.HorizontalOffset);
@@ -986,8 +864,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 			innerScrollViewer.BringIntoViewRequested += (s, e) =>
 			{
-				Assert.AreEqual(false, e.AnimationDesired);
-				Assert.AreEqual(false, e.Handled);
+				Assert.IsFalse(e.AnimationDesired);
+				Assert.IsFalse(e.Handled);
 				Assert.IsTrue(double.IsNaN(e.HorizontalAlignmentRatio));
 				Assert.IsTrue(double.IsNaN(e.VerticalAlignmentRatio));
 				Assert.AreEqual(0, e.HorizontalOffset);
@@ -1001,8 +879,8 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 
 			outerScrollViewer.BringIntoViewRequested += (s, e) =>
 			{
-				Assert.AreEqual(false, e.AnimationDesired);
-				Assert.AreEqual(false, e.Handled);
+				Assert.IsFalse(e.AnimationDesired);
+				Assert.IsFalse(e.Handled);
 				Assert.IsTrue(double.IsNaN(e.HorizontalAlignmentRatio));
 				Assert.IsTrue(double.IsNaN(e.VerticalAlignmentRatio));
 				Assert.AreEqual(0, e.HorizontalOffset);
@@ -1485,6 +1363,68 @@ namespace Uno.UI.RuntimeTests.Tests.Windows_UI_Xaml_Controls
 #endif
 		}
 #endif
+
+		[TestMethod]
+		public async Task When_SCP_Content_EmptySized_WithMargin_LayoutCycle()
+		{
+			var content = new Border
+			{
+				Margin = new(0, 4, 0, 4),
+				// using alignment to force empty size, without explicitly setting width/height
+				HorizontalAlignment = HorizontalAlignment.Left,
+				VerticalAlignment = VerticalAlignment.Top
+			};
+			var SUT = new ScrollViewer
+			{
+				Content = content,
+				// a width is required here to not, because SV will drop the update
+				// if either viewport's width or height is 0.
+				Width = 100,
+				HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+				HorizontalScrollMode = ScrollMode.Auto,
+				VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+				VerticalScrollMode = ScrollMode.Auto,
+			};
+
+			await UITestHelper.Load(SUT, x => x.IsLoaded);
+		}
+
+		[TestMethod]
+#if !HAS_INPUT_INJECTOR || !UNO_HAS_MANAGED_SCROLL_PRESENTER
+		[Ignore("This test only applies to managed scroll presenter and requires input injector.")]
+#endif
+		public async Task When_ScrollViewer_Touch_Scrolled()
+		{
+			var stackPanel = new StackPanel();
+			var random = Random.Shared;
+			for (int i = 0; i < 10; i++)
+			{
+				stackPanel.Children.Add(
+					new Rectangle()
+					{
+						Width = 50,
+						Height = 50,
+						Fill = new SolidColorBrush(Color.FromArgb(255, (byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256)))
+					});
+			}
+
+			var SUT = new ScrollViewer
+			{
+				Height = 300,
+				Content = stackPanel
+			};
+
+			await UITestHelper.Load(SUT);
+
+			var input = InputInjector.TryCreate() ?? throw new InvalidOperationException("Pointer injection not available on this platform.");
+			using var finger = input.GetFinger();
+			var bounds = SUT.GetAbsoluteBounds();
+			finger.Press(bounds.GetCenter());
+			finger.MoveTo(bounds.GetCenter().Offset(0, -50));
+			finger.Release();
+			await WindowHelper.WaitForIdle();
+			Assert.AreEqual(50, SUT.VerticalOffset);
+		}
 
 		[TestMethod]
 		public async Task When_Zero_Size_With_Margin()

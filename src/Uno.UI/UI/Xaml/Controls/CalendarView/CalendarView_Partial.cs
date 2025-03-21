@@ -19,6 +19,7 @@ using DirectUI;
 using Uno.Extensions;
 using DayOfWeek = Windows.Globalization.DayOfWeek;
 using DateTime = Windows.Foundation.WindowsFoundationDateTime;
+using Uno.UI.Extensions;
 
 namespace Microsoft.UI.Xaml.Controls
 {
@@ -58,7 +59,7 @@ namespace Microsoft.UI.Xaml.Controls
 		// 1. display Date if it is requested, if it is not requested, then
 		// 2. Today, if Today is not in given min/max range, then
 		// 3. the closest date to Today (i.e. the coerced date of Today)
-		DateTime m_lastDisplayedDate;
+		internal DateTime m_lastDisplayedDate;
 
 		DateTime m_today;
 		// m_minDate and m_maxDate are effective min/max dates, which could be different
@@ -2134,7 +2135,7 @@ namespace Microsoft.UI.Xaml.Controls
 
 						//A control must be focused before we can set Engagement on it, attempt to set focus first
 						bool focused = false;
-						focused = FocusManager.SetFocusedElementWithDirection(spScrollViewer, FocusState.Keyboard, false /*animateIfBringintoView*/, false, FocusNavigationDirection.None);
+						focused = this.SetFocusedElementWithDirection(spScrollViewer, FocusState.Keyboard, false /*animateIfBringintoView*/, FocusNavigationDirection.None);
 						if (focused)
 						{
 							FocusManager.SetEngagedControl(spScrollViewer);

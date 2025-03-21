@@ -25,16 +25,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Tmds.DBus" Version="0.16.0" />
+		<PackageReference Include="Tmds.DBus.Protocol" Version="0.21.2" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="SkiaSharp.NativeAssets.Linux" />
 		<PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" />
 		<PackageReference Include="SkiaSharp" />
-		<PackageReference Include="SkiaSharp.Harfbuzz" />
-
-		<PackageReference Include="Silk.NET.OpenGL" Version="2.16.0" PrivateAssets="All" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -1,4 +1,4 @@
-﻿<Project>
+<Project>
 
 	<Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 	<Import Project="crosstargeting_override.props" Condition="exists('crosstargeting_override.props')" />
@@ -10,6 +10,15 @@
 		<AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
 		<GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
 		<_SkipUpgradeNetAnalyzersNuGetWarning>true</_SkipUpgradeNetAnalyzersNuGetWarning>
+
+		<!-- Enable the MSTest runner, this is an opt-in feature when not using MSTest.Sdk -->
+		<EnableMSTestRunner>true</EnableMSTestRunner>
+
+		<!-- Enable the NUnit runner, this is an opt-in feature -->
+		<EnableNUnitRunner>true</EnableNUnitRunner>
+
+		<TestingPlatformDotNetTestSupport>true</TestingPlatformDotNetTestSupport>
+		<TestingPlatformCaptureOutput>false</TestingPlatformCaptureOutput>
 
 		<!-- Ensures the .xr.xml files are generated in a proper layout folder -->
 		<GenerateLibraryLayout>true</GenerateLibraryLayout>
@@ -45,7 +54,7 @@
 	</PropertyGroup>
 
 	<PropertyGroup>
-		<MicrosoftNetCompilersToolsetVersion>4.11.0-2.final</MicrosoftNetCompilersToolsetVersion>
+		<MicrosoftNetCompilersToolsetVersion>4.13.0</MicrosoftNetCompilersToolsetVersion>
 	</PropertyGroup>
 
   <ItemGroup>
@@ -124,6 +133,8 @@
 		<_AdjustedOutputProjects>$(_AdjustedOutputProjects);Uno.UI.Toolkit.Windows.csproj</_AdjustedOutputProjects>
 
 		<_AdjustedOutputProjects>$(_AdjustedOutputProjects);Uno.UI.Foldable.netcoremobile.csproj</_AdjustedOutputProjects>
+
+		<_AdjustedOutputProjects>$(_AdjustedOutputProjects);Uno.UI.GooglePlay.netcoremobile.csproj</_AdjustedOutputProjects>
 
 		<_AdjustedOutputProjects>$(_AdjustedOutputProjects);Uno.UI.FluentTheme.Tests.csproj</_AdjustedOutputProjects>
 		<_AdjustedOutputProjects>$(_AdjustedOutputProjects);Uno.UI.FluentTheme.Wasm.csproj</_AdjustedOutputProjects>
@@ -212,7 +223,7 @@
 
 	<PropertyGroup>
 		<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-		<IsTestProject>$(MSBuildProjectName.Contains('Test'))</IsTestProject>
+		<UnoDisableNetAnalyzers Condition="$(MSBuildProjectName.Contains('Test'))">true</UnoDisableNetAnalyzers>
 		<IsSampleProject>$(MSBuildProjectName.Contains('Sample'))</IsSampleProject>
 		<IsSampleProject Condition="'$(IsSampleProject)'=='false'">$(MSBuildProjectName.Contains('UnoIslands'))</IsSampleProject>
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -223,6 +234,9 @@
 
 		<!-- Workaround for https://github.com/dotnet/runtime/issues/103205 -->
 		<NoWarn>$(NoWarn);CS0436</NoWarn>
+		
+		<!-- Required for studio -->
+		<NoWarn>$(NoWarn);UNO0008</NoWarn>
 
 		<!-- On CI, UWP source is generated in a job running on Windows (CRLF EOLs). -->
 		<!-- When the artifacts are downloaded in a job running on Linux, IDE0055 will complain (expecting LF EOLs) -->
@@ -246,7 +260,7 @@
 				<AnalysisModeGlobalization>AllEnabledByDefault</AnalysisModeGlobalization>
 			</PropertyGroup>
 			<ItemGroup>
-				<PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0-preview.24122.1" PrivateAssets="All" />
+				<PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0-preview.24454.1" PrivateAssets="All" />
 			</ItemGroup>
 		</When>
 		<Otherwise>
@@ -275,5 +289,8 @@
 			</ItemGroup>
 		</When>
 	</Choose>
+
+	<!-- empty placeholder -->
+	<Target Name="_UnoGetCopyToOutputItems" />
 
 </Project>
