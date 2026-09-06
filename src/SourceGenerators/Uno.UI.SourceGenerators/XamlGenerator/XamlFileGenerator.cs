@@ -3336,8 +3336,8 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 				}
 
 				var isInsideFrameworkTemplate = IsMemberInsideFrameworkTemplate(objectDefinition).isInside;
-				// Template members get their templated parent from the materializing template's settings, so the
-				// apply block needs access to it. Computed before the block so it can shape the callback signature.
+				// Template members get their templated parent from the materializing template's settings. This only
+				// gates the OnTemplateMemberCreated call below; the signature is shaped by isInsideFrameworkTemplate.
 				var needsTemplatedParent = isInsideFrameworkTemplate
 					&& IsType(objectDefinitionType, Generation.DependencyObjectSymbol.Value);
 
